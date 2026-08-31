@@ -70,6 +70,14 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml start
 
 第一阶段不做充值流水、人工扣减或冲正；余额管理就是管理员设置绝对值。
 
+### 管理员基础额度不是员工额度
+
+New API 会同时校验并扣减虚拟 Key 和所属管理员用户的额度。因为本项目所有 Key 都属于同一个管理员，管理员剩余额度必须设置为远高于所有虚拟 Key 合计用量的基础设施上限；本机 POC 已覆盖为 ¥1,000,000。日常员工限制只改虚拟 Key，不能把管理员额度设成某个员工的预算。
+
+管理员页面“总额度”显示的是当前剩余额度加历史已用额度，因此执行“覆盖剩余额度”后，总额度可能高于输入值。运维应同时监控管理员剩余、每把 Key 剩余和渠道累计；管理员基础额度耗尽会让所有 Key 一起停止。
+
+过期 Key 被实际请求后，New API 会自动把 Token 状态标为 `3`。若测试后要重新启用，必须同时恢复未来/永不到期时间和启用状态，不能只改到期时间。
+
 ## Seedance 2.5 文生视频测试脚本
 
 先执行完全本地、不会访问方舟的脚本测试：
@@ -107,7 +115,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -Prompt "A red paper airplane flying smoothly across a clean white studio background, fixed camera, no text, no logo"
 ```
 
-脚本自动提交、轮询到终态，并把脱敏 JSON 写入已被 Git 忽略的 `artifacts/poc/`。文件保留任务 ID、画质、时长、状态、actual tokens 和 `query_retry_count`，只记录 `video_url_present`，不保存 Key、Authorization 或视频签名 URL。任务查询阶段若遇到临时 HTTP 5xx，脚本会在总超时范围内继续 GET；不会重新 POST，因此不会因瞬时数据库或网关故障重复创建付费任务。提交 POST 本身失败时不会自动重试，因为客户端无法仅凭网络错误判断上游是否已经创建任务，必须先由管理员按时间和 Key 名称检查任务列表后再决定是否重提。
+脚本自动提交、轮询到终态，并把脱敏 JSON 写入已被 Git 忽略的 `artifacts/poc/`。文件保留任务 ID、画质、时长、状态、actual tokens 和 `query_retry_count`，只记录 `video_url_present`，不保存 Key、Authorization 或视频签名 URL。任务查询阶段若遇到无 HTTP 响应或临时 HTTP 5xx，脚本会在总超时范围内继续 GET；不会重新 POST，因此不会因瞬时数据库或网关故障重复创建付费任务。提交 POST 本身失败时不会自动重试，因为客户端无法仅凭网络错误判断上游是否已经创建任务，必须先由管理员按时间和 Key 名称检查任务列表后再决定是否重提。
 
 拿到公开任务 ID 后执行对账：
 
@@ -128,7 +136,9 @@ Remove-Item Env:NEW_API_KEY -ErrorAction SilentlyContinue
 Remove-Variable pocSecureKey,pocCredential -ErrorAction SilentlyContinue
 ```
 
-本 POC 的受控真实矩阵使用同一提示词隔离变量：`POC-seedance-A` 运行 480p/5 秒、720p/5 秒、1080p/5 秒以比较画质；`POC-seedance-B` 运行 720p/4 秒、720p/10 秒、720p/30 秒以覆盖最短、常用和最长时长。若某组合暴露新问题，再补充有针对性的组合，不用无差别重复同一断言。
+本 POC 已覆盖 480p/5 秒、720p/4/5/10/30 秒、1080p/5 秒和 1080p/30 秒，以及 20 路并发、运行中重启和修复后三档复测。当前明确只验收文生视频；图像输入在未来启用前必须另做完整验收。若某组合暴露新问题，再补充有针对性的组合，不用无差别重复同一断言。
+
+Seedance 提交预占按实测输出帧数 `(秒 × 24 + 1)` 计算；最终账单始终以方舟 `usage.completion_tokens` 为准。管理员发现任何合法请求的最终费用高于预占时，应立即停用渠道并重新验证公式，不能依赖终态超额扣款突破单 Key 硬额度。
 
 ## Seedance 2.5 限时价格切换 SOP
 

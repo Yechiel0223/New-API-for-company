@@ -42,8 +42,8 @@
 | 项目 | 不可变标识 | 结果 |
 | --- | --- | --- |
 | New API 上游源码 | `2b6f1dfefbe217fed31fc0726717cc7de6958e8e`（v1.0.0-rc.29） | PASS：为当前分支祖先 |
-| 本项目当前提交 | `4a641bc243bf779fc0e4e8b686642eaaff9e9e37` | PASS |
-| 本机构建 New API 镜像 | `sha256:40ebb76b45965163fa7357aeb99a0d5bf458a0617902308d1569966ebaaec2dc` | PASS，amd64 |
+| 本项目修复提交 | `b227cf5`、`e0fb2a1` | PASS；分别修复跨虚拟 Key 查询隔离，以及 Seedance 预占终点帧和查询断线恢复 |
+| 本机构建 New API 镜像 | `sha256:2cefce1389ba110509cafd840caf65ebad53e9658ec0987f62b10ebac0e7ad70` | PASS，包含上述两项最小修复；旧镜像为 `sha256:ba17b5970edf48e3adbae8c79f636b8754cb14d94ad9cc8a53b99f617db32de9` |
 | PostgreSQL 镜像 | `postgres@sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b` | PASS，15.19-alpine3.24 |
 | 无 Redis 原子预占测试 | `TestTryReserveQuotaWithoutRedis`、`TestReserveFallsBackToDatabaseWhenRedisIsUnavailable` | PASS |
 
@@ -59,6 +59,7 @@
 | 实际数据库为 `new_api` | PASS | PostgreSQL 内查询确认 |
 | PostgreSQL 版本为 15.x | PASS | 15.19 |
 | 未使用 SQLite 账本 | PASS | `/api/setup` 报告 `database_type=postgres`，实时数据位于 PostgreSQL named volume |
+| 最终本机账本快照 | PASS | 10 个任务且活动任务 0；52 条日志；渠道/管理员已用均为 `97672169` quota = ¥195.344338；Key A/B 已用合计与其完全一致 |
 
 ## 4. 管理员设置
 
@@ -73,6 +74,7 @@
 | `QuotaPerUnit` | 500000 | PASS | `/api/status` 核对 |
 | `USDExchangeRate` | 1 | PASS | `/api/status` 核对 |
 | 币种显示 | 仅 CNY/RMB | PASS | `display_in_currency=true`、`quota_display_type=CNY` |
+| 管理员基础额度 | 作为基础设施上限，远高于各虚拟 Key | PASS | 管理员页面把剩余额度覆盖为 ¥1,000,000；单 Key 额度仍是日常业务限制 |
 | 临时 Token 人民币显示 | `¥1.00` | PASS | 见下方 `POC-CURRENCY-001`；验证后已删除 |
 
 ### 4.1 `POC-CURRENCY-001`：虚拟 Key 人民币显示验证
@@ -154,6 +156,34 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 依次表示：活跃临时 Key 0、软删除记录 1、该 Key 日志 0、系统任务 0。
 
+### 4.2 `POC-OWNER-QUOTA-001`：共享管理员基础额度
+
+**状态：** `PASS`
+
+**为什么测试：** New API 会同时扣虚拟 Key 额度和其所属用户额度。公司只创建一个管理员，若管理员额度与单 Key 同量级，不同员工即使各自 Key 仍有余额，也会因共享用户额度耗尽而互相阻塞。
+
+**实际发现：** 管理员初始额度为 ¥200。完成前六笔真实任务后，其剩余额度只有 ¥108.685224；第一次 1080p/60 秒诊断请求因此先命中共享用户额度，而没有命中预期的 Key B 额度限制。该请求没有创建任务或产生方舟费用，但证明管理员额度不是纯展示字段。
+
+**处理与验证：** 在管理员“用户管理 → 编辑 root → 调整额度”中选择覆盖，把管理员**剩余额度**设为 ¥1,000,000。页面提示“调整额度成功”。此后合法 1080p/30 秒请求能够准确命中 Key B 自身余额限制；20 路并发也只由 Key B 的原子预占决定。管理员页面“总额度”是剩余额度与历史已用额度之和，所以设置后显示约 ¥1,000,091.31 是正常口径，不是多充。
+
+**当前复核（完成全部本文测试后）：** 管理员 `quota=499947985219`、`used_quota=97672169`，即剩余 ¥999,895.970438、已用 ¥195.344338；两者随成功任务同步变化。管理员额度仅作为高水位基础设施上限，按员工统计仍以 `tokens`、`tasks` 和 `logs` 为准。生产运行必须监控这个上限，不能误以为它是无限额度。
+
+### 4.3 `POC-KEY-GUARDS-001`：禁用、过期和模型白名单本地拦截
+
+**状态：** `PASS`
+
+**测试时间：** 2026-09-01 00:11（Asia/Shanghai）
+
+**是否访问方舟/产生费用：** 否。三种请求均在 Token 鉴权/权限阶段被本地拒绝。
+
+**为什么测试：** 管理员对单 Key 的停用、到期和模型限制必须先于方舟调用生效，否则即使页面能编辑这些字段，也不能作为真实管理手段。
+
+**如何测试：** 使用 Key A 的合法 720p/4 秒请求作为探针。依次临时禁用 Key、把到期时间设为过去、恢复后改用白名单外模型 `doubao-seedance-2-0-260128`。每次只记录状态码和脱敏错误；原状态、到期时间均在 `finally` 恢复。过期 Key 首次请求后，New API 会自动把状态改为 `3`，因此恢复时必须同时恢复 `status=1` 与 `expired_time=-1`。
+
+**实际结果：** 禁用和过期均返回 HTTP 401 `Invalid token`；恢复后，白名单外模型返回 HTTP 403 `permission_denied`，消息为该 Token 无权访问对应模型。测试前后均为 Key A `remain=84645612`、`used=15354388`、任务数 8、该 Key 日志数 7、渠道累计 `89184781`；没有任务、余额、用户额度、渠道用量或计费日志变化。最终状态复核为 `status=1`、`expired_time=-1`、模型白名单仍仅包含 `doubao-seedance-2-5-260628`。
+
+**结论：** 三项单 Key 管理动作均在访问方舟前可靠生效，且测试状态已完整恢复。
+
 ## 5. 官方价格与能力来源
 
 ### 5.1 `POC-ARK-DOC-001`：官方模型能力与价格口径核对
@@ -182,7 +212,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 | 断言 | 官方页面实际值 | 结果 |
 | --- | --- | --- |
 | 完整 Model ID | `doubao-seedance-2-5-260628` | PASS |
-| 模式 | 文生视频、首帧生视频、首尾帧生视频、全模态参考生视频等 | PASS；第一阶段只验收文生视频与图生视频 |
+| 模式 | 文生视频、首帧生视频、首尾帧生视频、全模态参考生视频等 | PASS；当前只验收文生视频，图像输入延后 |
 | 分辨率 | 480p（8bit）、720p（8bit）、1080p（10bit） | PASS；2.5 不支持 4K |
 | 帧率 | 24 fps | PASS |
 | 输出时长 | 4–30 秒 | PASS |
@@ -199,7 +229,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 | 失败任务 | 仅成功生成的视频计费；审核等原因失败不收费 | PASS |
 | 含视频输入最低用量 | 存在最低 token 用量，准确值最终仍以 API usage 为准 | PASS；第一阶段不验收视频生视频 |
 
-**结论：** `PASS`。官方资料足以确认第一阶段的模型 ID、文生/图生能力、720p 价格和 1080p 探测价格。第一阶段明确不支持、不配置、不验收视频作为输入；图像输入不等于“包含视频输入”，因此图生视频使用“输入不含视频”单价。4K 必须视为不支持，不能因 New API 通用表单或插件枚举中出现 4K 就对员工宣称可用。
+**结论：** `PASS`。官方资料足以确认当前模型 ID、文生视频能力、720p 价格和 1080p 探测价格。当前明确不配置、不验收视频或图像作为输入；4K 必须视为不支持，不能因 New API 通用表单或插件枚举中出现 4K 就对员工宣称可用。
 
 **副作用与清理：** 无。本测试没有创建或修改运行数据，不产生方舟费用。
 
@@ -226,9 +256,9 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 | 检查项 | 实际观察 | 结果 |
 | --- | --- | --- |
-| 提交时 token 估算 | 插件按 `秒 × 宽 × 高 × 24 / 1024` 估算 | PASS |
+| 提交时 token 估算 | 上游原实现按 `秒 × 宽 × 高 × 24 / 1024`；真实六组任务一致证明输出还包含终点帧，已修正为 `(秒 × 24 + 1) × 宽 × 高 / 1024` | PASS；见 `e0fb2a1` 与三档修复后复测 |
 | 终态 actual usage | 成功时优先读取 `usage.completion_tokens`，缺失时才回退 `total_tokens` | PASS |
-| 失败终态 | 完成用量钩子不返回收费事实，任务结算链路具备退款能力 | PASS；仍需真实失败测试验证 |
+| 失败终态 | 完成用量钩子不返回收费事实，任务结算链路具备 CAS 防重退款 | PASS（代码级）；真实失败无法安全、确定复现，见 7.9 |
 | 480p/720p 旧倍率 | 无视频 `1`，含视频 `42/70`，与刊例价比例一致 | PASS |
 | 1080p 旧倍率 | 使用 `11.7/10.7` 与 `7.0/10.7`，既不精确等于中国区刊例价 `77/70`、`46/70`，也不含当前 72 折 | FAIL |
 | 4K 枚举 | 插件通用 schema 包含 4K，但官方 Seedance 2.5 模型列表不支持 4K | FAIL；上游应拒绝，第一阶段不得使用 |
@@ -244,8 +274,9 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 - `QuotaPerUnit=500000`，所以一个 raw quota 点为 `¥0.000002`；
 - 表达式返回单次请求的人民币费用数值，任务 quota 为 `round(人民币费用 × 500000)`；
-- 例如 720p 无视频输入、actual usage 为 108,000 token：`108000 × 70 / 1000000 = ¥7.56`，对应 `3,780,000` quota；
+- 例如 720p/5 秒无视频输入、actual usage 为 108,900 token：`108900 × 70 / 1000000 = ¥7.623`，对应 `3,811,500` quota；
 - 终态对账允许的最大本地量化误差为一个 raw quota 点，即 `¥0.000002`；不得把请求时估算值当成最终账单。
+- 提交预占使用修正后的终点帧公式；成功终态仍以方舟 actual usage 为唯一费用依据。480p 最大像素计算会产生小数 token，必须保留小数到最终 quota 四舍五入，不能提前截断。
 
 ### 5.4 `POC-PRICING-EXPR-001`：Seedance 2.5 第一阶段计费表达式
 
@@ -257,7 +288,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 **为什么测试**
 
-证明第一阶段可以完全复用 New API 的任务用量表达式，按官方 actual token 和分辨率计算人民币，而不使用不精确的内置 1080p 倍率。第一阶段只覆盖文生视频与图生视频，不考虑视频输入。
+证明当前文生视频范围可以完全复用 New API 的任务用量表达式，按官方 actual token 和分辨率计算人民币，而不使用不精确的内置 1080p 倍率。图像输入和视频输入均不在本轮范围内。
 
 **已保存表达式**
 
@@ -279,9 +310,9 @@ u("resolution") == "1080p"
 
 | 向量 | 预期档位 | 预期人民币 | 预期 quota | 实际结果 |
 | --- | --- | --- | --- | --- |
-| 480p、48,038 token | `480p_720p` | `¥3.36266` | `1,681,330` | PASS |
-| 720p、108,000 token | `480p_720p` | `¥7.56` | `3,780,000` | PASS |
-| 1080p、243,000 token | `1080p_promo` | `¥13.47192` | `6,735,960` | PASS |
+| 480p、48,437.8125 token | `480p_720p` | `¥3.390646875` | `1,695,323` | PASS |
+| 720p、108,900 token | `480p_720p` | `¥7.623` | `3,811,500` | PASS |
+| 1080p、245,025 token | `1080p_promo` | `¥13.584186` | `6,792,093` | PASS |
 | 720p、0 token | `480p_720p` | `¥0` | `0` | PASS |
 
 **实际执行与证据**
@@ -317,7 +348,15 @@ docker run --rm -e GOPROXY=https://goproxy.cn,direct `
   go test ./pkg/billingexpr -run '^TestSeedance25POCPricingVectors$' -count=1 -v
 ```
 
-测试夹具保留在 `pkg/billingexpr/seedance_pricing_poc_test.go`，不进入运行镜像、不访问方舟，可直接用上方命令复核。1080p 优惠结束切换到刊例价时，必须同时更新运行配置、该测试中的单价/期望值和本节证据。
+表达式夹具保留在 `pkg/billingexpr/seedance_pricing_poc_test.go`。插件预占夹具保留在 `plugins/doubao_usage_test.go`，覆盖 480p/5 秒、720p/4/5/10/30 秒和 1080p/5 秒六组真实观察值。两者均不访问方舟；插件测试会进入运行镜像对应源码。1080p 优惠结束切换到刊例价时，必须同时更新运行配置、表达式测试中的单价/期望值和本节证据。
+
+插件预占回归命令：
+
+```powershell
+docker run --rm -e GOPROXY=https://goproxy.cn,direct `
+  -v 'D:\new-api:/src' -w /src golang:1.26.1-alpine `
+  go test ./plugins -run '^TestDoubaoSeedanceSubmitEstimateIncludesTerminalFrame$' -count=1 -v
+```
 
 数据库复核命令（只读取非秘密计费配置）：
 
@@ -511,6 +550,8 @@ tasks|0
 3. 直接传 JSON 字符串也被同一参数层改写；改为 PostgreSQL `json_build_object(...)` 原生构造。一次已创建但未进入清理块的测试 token（`id=4`、名称 `reconciliation-fixture`）随后被精确删除，最终复核临时 token/task 均为 0。
 4. 第一笔真实任务证明 `private_data.billing_context.tiered_snapshot.usage_facts.tokens` 保留提交时估算，而 actual usage 位于 `tasks.data.usage.completion_tokens`。旧对账脚本因此把 48,037.5 的估算误当 actual，并错误报告 ¥0.027965 差异；运行时任务 quota 和差额结算日志实际正确。新增“估算 108,000、actual 109,000”回归夹具，先观察失败，再改为优先读取 `tasks.data.usage.completion_tokens`、其次 `total_tokens`、最后才回退估算快照。真实任务复核后差异为 0。
 5. 720p / 30 秒真实任务轮询期间，PostgreSQL 容器发生一次干净重建，一次 GET 恰好在数据库约 2 秒不可用窗口内返回 500。任务本身仍在方舟运行，New API 后台轮询在数据库恢复后继续并完成差额结算。针对该事实新增“首次 GET 返回 500、第二次成功”的测试夹具，先观察脚本失败，再实现仅对查询阶段 5xx 的自动重试；断言实际请求序列必须为 `POST,GET,GET`，确保不会重复创建付费任务。脚本证据新增 `query_retry_count`。容器事件能证明重建发生，但不能从现有证据确定是谁或哪个进程发起，因此不做无依据归因。
+6. New API 运行中任务重启测试进一步证明，轮询还会遇到“没有 HTTP 响应”的连接错误。脚本现对查询阶段的无响应或 HTTP 5xx 重试，但仍绝不自动重试 POST。真实 720p/4 秒任务在约 4.6 秒重启窗口内累计 `query_retry_count=4`，恢复后成功且只创建、结算一次；见第 9 节。
+7. 修复前六组真实任务的 actual usage 均比原 `秒 × 24` 估算多一个输出帧：720p 每次多 900 tokens，1080p 多 2,025 tokens，480p 约多一个 854×480 帧。新增六向量红灯测试后，将提交估算改为 `秒 × 24 + 1` 帧；修复后三档真实复测均未低估，见第 11 节。
 
 **结果哪里看**
 
@@ -528,7 +569,7 @@ tasks|0
 | --- | --- | --- | --- | --- | --- | --- |
 | 文生视频 | 480p | PASS | PASS | 48,437 tokens | ¥3.39059，差异 0 | PASS |
 | 文生视频 | 720p | PASS | PASS | 4 秒 87,300；5 秒 108,900；10 秒 216,900；30 秒 648,900 tokens | 四笔差异均为 0 | PASS |
-| 图生视频 | 720p | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 图生视频 | 720p | DEFERRED | DEFERRED | DEFERRED | DEFERRED | 当前明确只验收文生视频；启用前必须单独测试 |
 | 文生视频能力探测 | 1080p | PASS | PASS | 245,025 tokens | ¥13.584186，差异 0 | PASS |
 
 ## 7. 真实调用案例
@@ -695,7 +736,7 @@ tasks|0
 
 ### 7.6 720p 图生视频
 
-PENDING
+DEFERRED。当前范围明确为 Seedance 2.5 文生视频，图像输入暂不启用。本项不作为当前本机文生视频 POC 的阻塞项，但未来开放图生视频前必须重新执行创建、产物、actual usage、预占、终态费用和跨 Key 查询的完整验收，不能沿用文生视频结论。
 
 ### 7.7 `POC-T2V-1080P-5S-001`：1080p / 5 秒能力与活动价探测
 
@@ -723,39 +764,151 @@ PENDING
 
 **结论：** 1080p 实际能力、视频产物、活动价分档和最终对账全部通过。
 
-### 7.8 同步拒绝与退款
+### 7.8 `POC-SYNC-REJECT-001`：上游同步拒绝与全额返还
 
-PENDING
+**状态：** `PASS`
 
-### 7.9 终态失败与退款
+**是否访问方舟/产生费用：** 请求到达方舟参数校验，但没有创建任务，因此没有生成费用。
 
-PENDING；若无法安全、确定地复现，必须明确记录“not reproducible safely”，不得伪造证据。
+**为什么测试：** New API 会先预占再向方舟提交。如果上游同步拒绝请求，预占必须完整返还，不能留下幽灵任务或渠道用量。
 
-### 7.10 额度不足且未访问 Ark
+**如何测试：** 通过 Key B 直接提交 Seedance 2.5 不支持的 4K/5 秒请求，前后读取 Key 余额、任务数、该 Key 日志数和渠道累计用量。
 
-PENDING
+**实际结果：** HTTP 400，错误码 `invalid_request`，上游原因为分辨率参数无效。New API 日志先记录预占 ¥68.04，随后明确记录“请求失败, 返还预扣费”。前后均为 Key B `remain=66641500`、`used=33358500`、任务数 6、渠道累计 `45657388`；该 Key 日志数从 6 增至 7，只增加一条 `quota=0` 的失败日志。没有任务、余额或渠道费用变化。
+
+**结论：** 上游同步拒绝会全额返还预占且不创建任务，`PASS`。
+
+### 7.9 `POC-TERMINAL-FAILURE-001`：终态失败与幂等退款
+
+**状态：** `NOT RUN / not reproducible safely`（真实方舟）；`PASS`（代码级确定性测试）
+
+真实 Seedance 终态失败无法在不故意触发内容安全、破坏网络或制造不可控上游费用的情况下稳定复现，因此没有伪造真实失败证据，也不把同步 400 冒充异步终态失败。
+
+代码级测试覆盖 CAS 退款胜者/败者、阶梯计费失败返回调用方退款、后台轮询四种终态，以及失败任务只退款一次：
+
+```powershell
+docker run --rm -e GOPROXY=https://goproxy.cn,direct `
+  -v new-api-go-mod-cache:/go/pkg/mod `
+  -v new-api-go-build-cache:/root/.cache/go-build `
+  -v 'D:\new-api:/src' -w /src golang:1.26.1-alpine `
+  go test ./service -run '^(TestUpdateBatchTasksSettlesTieredUsageForTerminalStates|TestUpdateBatchTasksRefundsFailedTieredTask|TestCASGuardedRefund_Win|TestCASGuardedRefund_Lose|TestSettle_TieredFailureReturnsFalseForCallerRefund)$' -count=1 -v
+```
+
+上述五项及其子测试全部 `PASS`。这证明本地结算实现，但不替代未来自然发生失败任务时的真实方舟复核；生产观察到第一笔真实失败后，必须补记方舟终态、actual usage、退款和重复轮询证据。
+
+### 7.10 `POC-QUOTA-DENY-001`：合法请求额度不足且未访问 Ark
+
+**状态：** `PASS`
+
+**为什么测试：** 单 Key 余额必须是实际硬限制；余额不足的合法请求应在方舟任务创建前被拒绝，且不改变任何账务累计。
+
+**如何测试：** 修正预占公式后，Key B 剩余 ¥52.339214。提交官方合法边界内的 1080p/30 秒文生视频，所需预占为 1,460,025 tokens × ¥55.44/百万 = ¥80.943786。前后读取 Key 余额、任务数、Key 日志数、渠道与管理员额度。
+
+**实际结果：** HTTP 403 `permission_denied`，错误明确显示剩余 ¥52.339214、需要 ¥80.943786。前后均为 Key B `remain=26169607`、`used=73830393`、任务数 8、渠道累计 `89184781`、管理员 `quota=499956472607` / `used=89184781`；Key B 日志数仅从 30 增至 31，新增日志 `id=49`、`type=5`、`quota=0`。无任务、无余额变化、无渠道用量变化，证明没有产生方舟任务或费用。
+
+此前曾用 1080p/60 秒得到同类本地拒绝，但 60 秒超出官方 30 秒上限，故只保留为诊断记录，不作为本项验收证据。
+
+### 7.11 `POC-PRECHARGE-FRAME-001`：终点帧修复后三档真实复测
+
+**状态：** `PASS`
+
+**测试时间：** 2026-09-01 00:03 至 00:15（Asia/Shanghai）
+
+**为什么测试：** 修复前所有真实任务的 actual usage 均比预占多一个输出帧，违反“合法请求最终费用不得高于预占”的硬门槛。单元测试不足以证明方舟真实计量，必须重建镜像后覆盖全部三档画质。
+
+**如何测试：** 使用镜像 `sha256:2cefce1389ba110509cafd840caf65ebad53e9658ec0987f62b10ebac0e7ad70`，分别运行 480p/5 秒、720p/4 秒和 1080p/5 秒文生视频；480p 与 1080p 并行提交并使用不同提示词。逐笔用 `show-seedance-reconciliation.ps1` 对账。
+
+| 分辨率/时长 | 脱敏任务 ID | 预占 | actual / 实扣 | 结果 |
+| --- | --- | --- | --- | --- |
+| 480p/5 秒 | `task_dINjWtEyshIPAIgtYyPCa1otNl3SiwE2` | 48,437.8125 tokens；1,695,323 quota = ¥3.390646 | 48,437；1,695,295 quota = ¥3.390590；退回 ¥0.000056 | PASS |
+| 720p/4 秒 | `task_vKSCicqBR3xZmP5Cc2s8NqQgDZj4Vdbu` | 87,300 tokens；¥6.111000 | 87,300；¥6.111000 | PASS |
+| 1080p/5 秒 | `task_DC03132iMUYI5sbPQZlmP5PaY33uPnhu` | 245,025 tokens；¥13.584186 | 245,025；¥13.584186 | PASS |
+
+三笔均为 `SUCCESS`、`video_url_present=true`、`billing_matches=true`。480p 保留小数 token 到最终 quota 四舍五入，因此产生 28 raw quota（¥0.000056）的保守返还；720p 和 1080p 预占与 actual 完全相等。三档均未再发生超额扣款。
 
 ## 8. 跨 Key 隔离
 
-- Key B 查询 Key A 任务：PENDING
-- 响应不得包含任务内容、输出地址或 usage：PENDING
-- Key A 查询自身任务：PENDING
+### 8.1 `POC-KEY-ISOLATION-001`：同一管理员下的虚拟 Key 任务隔离
+
+**状态：** `PASS`（发现问题、回归测试、最小修复、完整测试和真实复测均完成）
+
+**测试时间：** 2026-08-31 17:18 至 17:34（Asia/Shanghai）。
+
+**是否访问方舟/产生费用：** 否。只查询已完成任务；没有创建上游任务。
+
+**为什么测试**
+
+公司所有虚拟 Key 都归属于同一个 New API 管理员用户。仅按 `user_id` 隔离不足以防止员工 B 用已知任务 ID读取员工 A 的广告视频、状态和 usage，因此必须验证并强制按虚拟 `token_id` 隔离。
+
+**如何测试**
+
+1. 使用 Key B 查询由 Key A 创建的 `task_mqkYajIjhq1D30OQPihfoY0UJTxmkzBG`，只记录 HTTP 状态和响应是否含任务 ID、usage/视频字段，不保存完整响应或签名 URL。
+2. 使用 Key A 查询同一任务，确认所有者仍能读取成功终态、48,437 actual tokens 和视频存在性。
+3. 在单元测试中增加同一 `user_id`、同一插件平台但不同 `token_id` 的任务，以及没有 token_id 的旧任务；两者都必须返回与不存在任务相同的 404。
+4. 最小修改查询边界：保留原有 `user_id + platform + task_id` 条件，再要求任务私有计费归属的 `TokenId` 等于当前认证 Key 的 token_id；不修改管理员页面、计费或渠道逻辑。
+5. 运行定向测试和完整 `go test ./middleware -count=1`，重建镜像并仅替换 New API 容器，再重复步骤 1–2。
+
+**预期结果：** Key B 得到不泄露任务是否存在的 404，响应不含目标任务 ID、usage 或视频字段；Key A 查询仍为 200。完整 middleware 测试必须通过。
+
+**实际结果**
+
+| 阶段 | Key B 查 Key A | 响应泄露 | Key A 自查 | 结果 |
+| --- | --- | --- | --- | --- |
+| 修复前真实服务 | HTTP 200 | 包含状态、usage 和视频结果 | HTTP 200 | FAIL，确认缺口 |
+| 新增回归测试 | 不同 token / 无 token 任务均实际返回 200 | 返回任务 ID | 所有者 200 | 预期红灯 |
+| 修复后单元测试 | 两类均 404 | 与不存在任务响应一致 | 所有者 200 | PASS |
+| 修复后真实服务 | HTTP 404 | `contains_task_id=false`、`contains_usage_or_video=false` | `succeeded`、48,437 tokens、视频存在 | PASS |
+
+定向测试和完整 middleware 包均通过：
+
+```text
+--- PASS: TestPrepareTaskPluginStaticQueryHidesTaskExistenceAndSanitizesErrors
+PASS
+ok github.com/QuantumNous/new-api/middleware
+
+ok github.com/QuantumNous/new-api/middleware 0.362s
+```
+
+**代码与运行证据：** 修复提交 `b227cf5`；运行镜像 `sha256:ba17b5970edf48e3adbae8c79f636b8754cb14d94ad9cc8a53b99f617db32de9`。真实 Key 只在进程变量中使用，未输出或写入文档。
+
+**副作用与清理：** 重建并替换一次 New API 容器；PostgreSQL 容器和数据卷未改变。没有产生方舟费用。修复保留为本项目相对上游的必要补丁，升级 New API 时必须重新验证或确认上游已包含等价修复。
+
+**结论：** 虚拟 Key 之间的异步任务读取已从真实 FAIL 修复为 PASS；员工只能用自己的 Key 查询自己的任务。
 
 ## 9. 重启恢复与结算幂等
 
-- 运行中任务在 New API 重启后继续：PENDING
-- 运行中任务在 PostgreSQL 干净重建、约 2 秒不可用后继续并完成一次结算：PASS，见 `POC-T2V-720P-30S-001`；这不能替代上面的 New API 重启测试
-- 同一终态任务重复查询 20 次余额不变：PENDING
-- 容器 stop/start 后任务、日志和余额仍存在：PENDING
+### 9.1 `POC-NEWAPI-RESTART-001`：运行中重启 New API
+
+**状态：** `PASS`
+
+**测试时间：** 2026-09-01 00:03:40 至 00:07:28（Asia/Shanghai）
+
+**方法与结果：** Key A 提交 720p/4 秒任务 `task_vKSCicqBR3xZmP5Cc2s8NqQgDZj4Vdbu`。数据库先记录 `NOT_START`、预占 3,055,500 quota；任务进入生成后，于 00:04:08.565 重启 New API，00:04:13.210 `/api/status` 恢复，服务窗口约 4.6 秒。重启后原任务为 `IN_PROGRESS`，脚本在查询阶段累计 `query_retry_count=4`，没有重新 POST；00:07:28.880 原任务成功。
+
+最终只有 1 条同任务 ID 记录、1 条计费日志、0 条活动任务；actual 为 87,300 tokens，预占与实扣均为 ¥6.111，差额 0。Key A 从 `87701112|12298888` 变为 `84645612|15354388`，正好只结算 3,055,500 quota；管理员和渠道累计也各只增加同额。脱敏脚本证据位于 Git 忽略目录 `artifacts/poc/seedance-task_vKSCicqBR3xZmP5Cc2s8NqQgDZj4Vdbu.json`。
+
+### 9.2 其他恢复与幂等证据
+
+- 运行中任务在 PostgreSQL 干净重建、约 2 秒不可用后继续并完成一次结算：`PASS`，见 `POC-T2V-720P-30S-001`。
+- 同一终态任务重复查询 20 次余额不变：`PASS`，实际连续执行两轮共 40 次；每轮 20/20 响应一致，标准取证轮前后均为 `87701112|12298888|1695295|6`，依次是 Key A 剩余 quota、已用 quota、任务 quota、Key A 日志数。
+- 旧镜像替换为隔离修复镜像后数据保持：`PASS`；前后均为 `6|22|87701112|66641500`，依次是任务数、日志数、Key A/B 剩余 quota。
+- 本次从 `sha256:ba17…2de9` 替换为 `sha256:2cef…ad70` 前后也保持：用户 1、任务 7、日志 47、渠道累计 `86129281`、管理员 `499959528107|86129281`、Key A `87701112|12298888`、Key B `26169607|73830393`；`/api/status success=true`。
 
 ## 10. 并发原子预占
 
-- 请求数：20
-- 可支付保守预占次数：1
-- 实际接受数：PENDING
-- 实际 Ark 上游任务数：PENDING
-- 是否出现负余额：PENDING
-- 最终结算次数：PENDING
+**测试编号：** `POC-CONCURRENT-RESERVE-001`
+
+**状态：** `PASS`
+
+使用 Key B 在同一时刻并发提交 20 个 1080p/30 秒请求。当时 Key B 只能支付一次预占。
+
+- 请求数：20；HTTP 200 恰好 1 个，HTTP 403 恰好 19 个；
+- 实际方舟任务：恰好 1 个，`task_nlS2jrvriCdfCsAvcbvEFDcAPpoPxwmi`；
+- 被拒请求：19 条本地错误日志，`quota=0`，没有对应任务；
+- 接受任务：预估 1,458,000 tokens / ¥80.83152，actual 1,460,025 tokens / ¥80.943786，最终只结算一次；
+- Key B 从 ¥133.283000 变为 ¥52.339214，没有瞬时或最终负余额；数据库只增加 1 条任务和 1 条成功计费记录。
+
+该测试同时暴露修复前预估少一个 1080p 帧（2,025 tokens / ¥0.112266），直接促成 `e0fb2a1`。修复后的同参数预占已变为 1,460,025 tokens / ¥80.943786，并由单元向量与三档真实复测确认。
 
 ## 11. 余额对账
 
@@ -766,11 +919,15 @@ PENDING
 | 720p / 4 秒文生视频 | 86,400 | ¥6.048 | 87,300 | ¥6.111 | ¥6.111 | ¥0 | PASS |
 | 720p / 10 秒文生视频 | 216,000 | ¥15.12 | 216,900 | ¥15.183 | ¥15.183 | ¥0 | PASS |
 | 720p / 30 秒文生视频 | 648,000 | ¥45.36 | 648,900 | ¥45.423 | ¥45.423 | ¥0 | PASS |
-| 720p 图生视频 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 720p 图生视频 | DEFERRED | DEFERRED | DEFERRED | DEFERRED | DEFERRED | DEFERRED | 当前不启用 |
 | 1080p / 5 秒探测 | 243,000 | ¥13.47192 | 245,025 | ¥13.584186 | ¥13.584186 | ¥0 | PASS |
+| 1080p / 30 秒并发胜者（修复前） | 1,458,000 | ¥80.83152 | 1,460,025 | ¥80.943786 | ¥80.943786 | ¥0 | PASS；发现预占不足 |
+| 480p / 5 秒（修复后） | 48,437.8125 | ¥3.390646 | 48,437 | ¥3.39059 | ¥3.39059 | ¥0 | PASS；返还 ¥0.000056 |
+| 720p / 4 秒重启恢复（修复后） | 87,300 | ¥6.111 | 87,300 | ¥6.111 | ¥6.111 | ¥0 | PASS |
+| 1080p / 5 秒（修复后） | 245,025 | ¥13.584186 | 245,025 | ¥13.584186 | ¥13.584186 | ¥0 | PASS |
 
-允许的最大舍入差为一个 raw quota 点，即 `¥0.000002`。最终费用不得高于保守预占。
+允许的最终实扣与官方公式重算最大舍入差为一个 raw quota 点，即 `¥0.000002`。修复前历史任务的最终实扣准确，但预占普遍少一个输出帧，不满足硬额度要求；`e0fb2a1` 已修复。修复后三档真实任务均满足“最终费用不高于预占”，其中 480p 因小数 token 四舍五入产生 ¥0.000056 的保守返还。未来任何合法请求若再次出现最终费用高于预占，必须停止生产验收并修正公式。
 
 ## 12. 最终 GO / NO-GO
 
-PENDING：全部硬门槛完成后，只能写入计划规定的 GO 或 NO-GO 原句。
+PENDING：本机文生视频的计费、隔离、并发、Key 限制和重启硬门槛已通过；仍需在方舟控制台按相同时间窗口核对官方总任务数、总 usage 与人民币账单后，才能给出最终 GO / NO-GO。图生视频当前明确延后，不纳入本轮结论；真实异步失败为 `not reproducible safely`，首笔自然失败发生后必须补录。
