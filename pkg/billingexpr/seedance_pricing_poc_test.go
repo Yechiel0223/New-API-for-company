@@ -19,9 +19,9 @@ func TestSeedance25POCPricingVectors(t *testing.T) {
 		wantCost   float64
 		wantQuota  int
 	}{
-		{name: "480p", resolution: "480p", tokens: 48_038, wantTier: "480p_720p", wantCost: 3.36266, wantQuota: 1_681_330},
-		{name: "720p", resolution: "720p", tokens: 108_000, wantTier: "480p_720p", wantCost: 7.56, wantQuota: 3_780_000},
-		{name: "1080p promo", resolution: "1080p", tokens: 243_000, wantTier: "1080p_promo", wantCost: 13.47192, wantQuota: 6_735_960},
+		{name: "480p", resolution: "480p", tokens: 48_437.8125, wantTier: "480p_720p", wantCost: 3.390646875, wantQuota: 1_695_323},
+		{name: "720p", resolution: "720p", tokens: 108_900, wantTier: "480p_720p", wantCost: 7.623, wantQuota: 3_811_500},
+		{name: "1080p promo", resolution: "1080p", tokens: 245_025, wantTier: "1080p_promo", wantCost: 13.584186, wantQuota: 6_792_093},
 		{name: "zero tokens", resolution: "720p", tokens: 0, wantTier: "480p_720p", wantCost: 0, wantQuota: 0},
 	}
 

@@ -48,12 +48,12 @@ export const meta = {
   // Official Ark formula tokens = (input + output seconds) × W × H × 24 / 1024,
   // 16:9 max-pixel sizes, cross-checked against Volcengine price examples.
   usageExamples: [
-    { label: "480p · 5s", facts: { tokens: 48038, resolution: "480p", video_input: "none" } },
-    { label: "720p · 5s", facts: { tokens: 108000, resolution: "720p", video_input: "none" } },
-    { label: "1080p · 5s", facts: { tokens: 243000, resolution: "1080p", video_input: "none" } },
-    { label: "4k · 5s", facts: { tokens: 972000, resolution: "4k", video_input: "none" } },
-    { label: "720p · 10s", facts: { tokens: 216000, resolution: "720p", video_input: "none" } },
-    { label: "720p · 5s (+4s 输入视频)", facts: { tokens: 194400, resolution: "720p", video_input: "video" } },
+    { label: "480p · 5s", facts: { tokens: 48437.8125, resolution: "480p", video_input: "none" } },
+    { label: "720p · 5s", facts: { tokens: 108900, resolution: "720p", video_input: "none" } },
+    { label: "1080p · 5s", facts: { tokens: 245025, resolution: "1080p", video_input: "none" } },
+    { label: "4k · 5s", facts: { tokens: 980100, resolution: "4k", video_input: "none" } },
+    { label: "720p · 10s", facts: { tokens: 216900, resolution: "720p", video_input: "none" } },
+    { label: "720p · 5s (+4s 输入视频)", facts: { tokens: 195300, resolution: "720p", video_input: "video" } },
   ],
   routes: [
     { method: "POST", path: "/doubao/api/v3/contents/generations/tasks", type: "submit", decode: "createTask", render: "taskCreated" },
@@ -130,7 +130,9 @@ function resolutionMaxPixels(resolution) {
 
 function estimateTokens(seconds, resolution) {
   const dims = resolutionMaxPixels(resolution);
-  return (seconds * dims[0] * dims[1] * 24) / 1024;
+  // Ark completion usage includes both ends of the output timeline. Real
+  // Seedance 2.5 results consistently contain duration*24 + 1 billed frames.
+  return ((seconds * 24 + 1) * dims[0] * dims[1]) / 1024;
 }
 
 function videoInputRatio(model, resolution, content) {

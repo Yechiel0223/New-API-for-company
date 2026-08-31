@@ -92,6 +92,7 @@ try {
   @'
 import json
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -140,7 +141,11 @@ class Handler(BaseHTTPRequestHandler):
 
 server = HTTPServer(("127.0.0.1", port), Handler)
 ready_path.write_text("ready", encoding="utf-8")
-for _ in range(3):
+server.handle_request()
+server.server_close()
+time.sleep(2.0)
+server = HTTPServer(("127.0.0.1", port), Handler)
+for _ in range(2):
     server.handle_request()
 server.server_close()
 '@ | Set-Content -LiteralPath $fixturePath -Encoding utf8
@@ -181,7 +186,7 @@ server.server_close()
     Assert-True -Condition ($liveJson.task_id -eq "task_test_123") -Message "live mode must return the public task id"
     Assert-True -Condition ([int]$liveJson.completion_tokens -eq 108000) -Message "live mode must return actual completion tokens"
     Assert-True -Condition ($liveJson.video_url_present -eq $true) -Message "live mode must record that a video URL exists"
-    Assert-True -Condition ([int]$liveJson.query_retry_count -eq 1) -Message "live mode must report one transient query retry"
+    Assert-True -Condition ([int]$liveJson.query_retry_count -eq 1) -Message "live mode must report the transient query 5xx retry"
     Assert-True -Condition (Test-Path -LiteralPath $liveJson.evidence_path -PathType Leaf) -Message "live mode must save a sanitized evidence file"
 
     $evidence = Get-Content -Raw -LiteralPath $liveJson.evidence_path
@@ -189,7 +194,7 @@ server.server_close()
     Assert-True -Condition (-not ($evidence -match "media\.example|do-not-store")) -Message "evidence must not save the signed video URL"
     Assert-True -Condition (($evidence | ConvertFrom-Json).completion_tokens -eq 108000) -Message "evidence must retain actual completion tokens"
     $requestSequence = @((Get-Content -LiteralPath $requestLogPath)) -join ","
-    Assert-True -Condition ($requestSequence -eq "POST,GET,GET") -Message "a transient query 5xx must retry GET without submitting another POST"
+    Assert-True -Condition ($requestSequence -eq "POST,GET,GET") -Message "transient query failures must not submit another POST"
 
     "PASS seedance submit, transient query retry, poll, and sanitized evidence"
   } finally {

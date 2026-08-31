@@ -91,7 +91,7 @@ if (-not $DryRun) {
       if ($null -ne $_.Exception.Response) {
         $statusCode = [int]$_.Exception.Response.StatusCode
       }
-      if ($statusCode -ge 500 -and $statusCode -le 599) {
+      if ($null -eq $statusCode -or ($statusCode -ge 500 -and $statusCode -le 599)) {
         $queryRetryCount++
         continue
       }
