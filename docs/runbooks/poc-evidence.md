@@ -339,6 +339,64 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 **结论：** 后端保存校验、数据库持久化、页面列表模式和四组确定性计算全部一致，`POC-PRICING-EXPR-001` 为 `PASS`。前端编辑弹窗缺陷不影响当前运行时读取，但构成明确的运维限制，必须按上述方式规避。
 
+### 5.5 `POC-ARK-CHANNEL-001`：Seedance 2.5 方舟渠道配置
+
+**状态：** `PASS`
+
+**测试时间：** 2026-08-31 16:10:35 +08:00
+
+**是否访问方舟/产生费用：** 否。这里只创建并读取本地渠道配置，没有发起渠道测试或模型任务。
+
+**为什么测试**
+
+证明 New API 可以用一个公司真实方舟 Key 建立上游渠道，并严格把该渠道限制为 Seedance 2.5。还要确认 Base URL 不重复包含 `/api/v3`，避免任务插件最终生成错误地址。
+
+**前置条件**
+
+- New API 和 PostgreSQL 容器正常运行；
+- 管理员已登录；
+- 真实方舟 Key 由用户本人直接输入浏览器，不经过聊天、自动化脚本、终端或测试文档。
+
+**如何测试**
+
+1. 在“渠道 → 新建”选择“火山方舟”（内部类型 `45`）。
+2. 设置名称 `Ark-Seedance-2.5-POC`，Base URL 保持 `https://ark.cn-beijing.volces.com`。
+3. 模型白名单只添加 `doubao-seedance-2-5-260628`；不添加文生图、图生图或其他模型。
+4. 用户本人在页面输入真实方舟 Key 并保存。
+5. 在渠道列表核对名称存在。
+6. 用下方脱敏 SQL 只读取非秘密字段和 `key_present` 布尔值；不得读取 `key` 原文。
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
+  psql -U new_api -d new_api -F '|' -Atc "select id,name,type,coalesce(base_url,''),models,status,(key is not null and length(key)>0) as key_present,used_quota,test_time,response_time from channels where name='Ark-Seedance-2.5-POC' order by id;"
+```
+
+**预期结果**
+
+- 只存在一条同名渠道；
+- 类型为 `45`，Base URL 不带 `/api/v3` 或尾部斜杠；
+- `models` 只有 Seedance 2.5 的精确 Model ID；
+- `status=1`、`key_present=true`；
+- 创建时 `used_quota=0`、`test_time=0`、`response_time=0`，证明尚未执行上游测试。
+
+**实际结果**
+
+```text
+1|Ark-Seedance-2.5-POC|45|https://ark.cn-beijing.volces.com|doubao-seedance-2-5-260628|1|t|0|0|0
+```
+
+所有预期字段一致，渠道列表也显示该名称。自动化准备点击保存时页面已经返回渠道列表、表单不存在，随后数据库证明确实已经保存，因此没有重复提交。第一次脱敏 SQL 使用了当前表中不存在的旧字段名 `group_name`，第二次尝试又因 PowerShell 对 `group` 列引号转义失败；两次都只是只读查询失败，没有改变数据、没有读取密钥，最终去掉非关键分组列后查询成功。
+
+**结果哪里看**
+
+- 管理员页面：`http://localhost:3000/channels`；
+- 权威持久化：PostgreSQL `channels` 表，使用上方脱敏 SQL；
+- 后续真实连通与结算：本文件将另建付费任务测试，不能用本节代替。
+
+**副作用与清理：** 创建了一条启用状态的上游渠道，真实 Key 仅保存在 New API 数据库的渠道凭证字段中。本节没有创建虚拟 Key、没有发起任务、没有产生方舟费用。渠道需保留供后续测试使用，不清理。
+
+**结论：** 渠道类型、Base URL、唯一模型白名单、启用状态与密钥存在性全部符合预期，`POC-ARK-CHANNEL-001` 为 `PASS`。这只证明本地配置正确，不证明真实 Key 权限或方舟接口连通；后者必须由后续真实任务测试验证。
+
 ## 6. 能力矩阵
 
 | 模式 | 分辨率 | 创建 | 终态 | actual usage | 账单核对 | 结论 |
