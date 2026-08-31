@@ -484,7 +484,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - 真实模式缺少 `NEW_API_KEY` 时在网络请求前被拒绝；
 - 本地 HTTP 夹具返回成功终态后，脚本保留 `completion_tokens=108000` 和 `video_url_present=true`，但证据中没有 Key 或签名 URL；
 - 未知任务明确返回 `Task not found`；
-- 720p 夹具：108,000 tokens、3,780,000 quota、¥7.56、重算差额 0；
+- 720p 夹具：提交估算 108,000 tokens / ¥7.56、终态 actual 109,000 tokens / ¥7.63，对账必须优先 actual usage 且重算差额为 0；
 - 1080p 活动价夹具：243,000 tokens、6,735,960 quota、¥13.47192、重算差额 0；
 - 测试完成后数据库临时 token/task 均为 0。
 
@@ -509,6 +509,7 @@ tasks|0
 1. 第一版本地 HTTP 夹具在 Windows PowerShell 5.1 使用 `Start-Job` + 阻塞 `AcceptTcpClient()`，清理时 `Stop-Job` 卡住；最小复现证明 PowerShell 7 可停止而 5.1 不可靠。诊断进程被终止，夹具改为隐藏运行、处理两次请求后自行退出的 Python 本地进程，生产脚本未因此改变。
 2. PostgreSQL 夹具最初因 Windows→Docker 参数层改写保留字 `group` 的双引号而语法失败；该非关键列被移除。
 3. 直接传 JSON 字符串也被同一参数层改写；改为 PostgreSQL `json_build_object(...)` 原生构造。一次已创建但未进入清理块的测试 token（`id=4`、名称 `reconciliation-fixture`）随后被精确删除，最终复核临时 token/task 均为 0。
+4. 第一笔真实任务证明 `private_data.billing_context.tiered_snapshot.usage_facts.tokens` 保留提交时估算，而 actual usage 位于 `tasks.data.usage.completion_tokens`。旧对账脚本因此把 48,037.5 的估算误当 actual，并错误报告 ¥0.027965 差异；运行时任务 quota 和差额结算日志实际正确。新增“估算 108,000、actual 109,000”回归夹具，先观察失败，再改为优先读取 `tasks.data.usage.completion_tokens`、其次 `total_tokens`、最后才回退估算快照。真实任务复核后差异为 0。
 
 **结果哪里看**
 
@@ -524,6 +525,7 @@ tasks|0
 
 | 模式 | 分辨率 | 创建 | 终态 | actual usage | 账单核对 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
+| 文生视频 | 480p | PASS | PASS | 48,437 tokens | ¥3.39059，差异 0 | PASS |
 | 文生视频 | 720p | PENDING | PENDING | PENDING | PENDING | PENDING |
 | 图生视频 | 720p | PENDING | PENDING | PENDING | PENDING | PENDING |
 | 文生视频能力探测 | 1080p | PENDING | PENDING | PENDING | PENDING | PENDING |
@@ -532,27 +534,77 @@ tasks|0
 
 每个案例只记录虚拟 Key 名称、脱敏任务 ID/证据文件、时间、终态、actual usage、预占人民币、最终扣费人民币和剩余人民币。不得记录 Key 值或完整输出 URL 查询参数。
 
-### 7.1 720p 文生视频
+### 7.1 `POC-T2V-480P-5S-001`：480p / 5 秒文生视频
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-A`（`token_id=2`）
+
+**时间：** 2026-08-31 16:40:49 至 16:43:18（Asia/Shanghai），约 149 秒。
+
+**是否访问方舟/产生费用：** 是。创建一条真实 Seedance 2.5 文生视频任务，最终 New API 扣费 ¥3.39059；按官方 actual tokens 与 ¥70/百万 token 重算同为 ¥3.39059。
+
+**为什么测试**
+
+验证公司真实方舟 Key 权限、类型 45 渠道路由、Seedance 插件路径、虚拟 Key 鉴权、异步轮询、视频产物、actual usage 差额结算和人民币余额形成完整闭环。
+
+**请求条件**
+
+- Model ID：`doubao-seedance-2-5-260628`；
+- 画质：480p；
+- 时长：5 秒；
+- 模式：纯文本输入，无图片、无视频输入；
+- 提示词：`A red paper airplane flying smoothly across a clean white studio background, fixed camera, no text, no logo`。
+
+**实际结果与证据**
+
+- 公开任务 ID：`task_mqkYajIjhq1D30OQPihfoY0UJTxmkzBG`；
+- 终态：`SUCCESS` / API `succeeded`；
+- `video_url_present=true`，不保存完整签名 URL；
+- 脱敏调用证据：`artifacts/poc/seedance-task_mqkYajIjhq1D30OQPihfoY0UJTxmkzBG.json`（Git 忽略）；
+- 渠道：`channel_id=1`；动作：`text_to_video`；模型、Key 名称和 token_id 均正确。
+
+| 指标 | 值 |
+| --- | ---: |
+| 提交估算 tokens | 48,037.5 |
+| 预占 raw quota | 1,681,313 |
+| 预占人民币 | ¥3.362626 |
+| `usage.completion_tokens` | 48,437 |
+| 最终 raw quota | 1,695,295 |
+| 最终扣费 | ¥3.39059 |
+| official usage 重算 | `48437 × 70 / 1000000 = ¥3.39059` |
+| 最终重算差异 | ¥0.000000 |
+| Key A 剩余 | ¥196.60941 |
+
+差额结算日志包含初始消费 `1,681,313` quota 和补扣 `13,982` quota，并记录 `pre_consumed_quota=1681313`、`actual_quota=1695295`。两者合计等于任务最终 quota；没有重复结算。
+
+**测试中发现并修复的问题：** 初版对账脚本从计费快照读取 48,037.5 的估算，而不是从任务数据读取 48,437 actual tokens，因此曾错误显示账单不匹配。运行时扣费本身一直正确。修复过程和回归测试见 5.7；修复后本案例 `usage_source=task.data.usage.completion_tokens`、`billing_matches=true`。
+
+**副作用与清理：** 保留一条成功任务、两条消费/差额日志和 ¥3.39059 的真实用量审计记录，不删除、不退款；这是 POC 的有效账单证据。完整 Key 与签名 URL均未进入 Git、聊天或终端输出。
+
+**结论：** 真实 480p 文生视频、视频产物、actual usage 差额结算和人民币对账全部通过，`POC-T2V-480P-5S-001` 为 `PASS`。
+
+### 7.2 720p 文生视频
 
 PENDING
 
-### 7.2 720p 图生视频
+### 7.3 720p 图生视频
 
 PENDING
 
-### 7.3 1080p 能力探测
+### 7.4 1080p 能力探测
 
 PENDING
 
-### 7.4 同步拒绝与退款
+### 7.5 同步拒绝与退款
 
 PENDING
 
-### 7.5 终态失败与退款
+### 7.6 终态失败与退款
 
 PENDING；若无法安全、确定地复现，必须明确记录“not reproducible safely”，不得伪造证据。
 
-### 7.6 额度不足且未访问 Ark
+### 7.7 额度不足且未访问 Ark
 
 PENDING
 

@@ -61,7 +61,7 @@ try {
   $insertTaskSql = @"
 insert into tasks (created_at,updated_at,task_id,platform,user_id,channel_id,quota,action,status,submit_time,start_time,finish_time,progress,properties,private_data,data)
 values (
-  $timestamp,$timestamp,'$fixtureTaskId','45',1,1,3780000,'text_to_video','SUCCESS',$timestamp,$timestamp,$timestamp,'100%',
+  $timestamp,$timestamp,'$fixtureTaskId','45',1,1,3815000,'text_to_video','SUCCESS',$timestamp,$timestamp,$timestamp,'100%',
   json_build_object('origin_model_name','doubao-seedance-2-5-260628'),
   json_build_object(
     'token_id',$fixtureTokenId,
@@ -72,7 +72,7 @@ values (
       )
     )
   ),
-  json_build_object()
+  json_build_object('usage',json_build_object('completion_tokens',109000,'total_tokens',109000))
 );
 "@
   $null = & $dockerCommand compose --env-file $envPath -f $composePath exec -T postgres `
@@ -105,12 +105,16 @@ values (
   Assert-True -Condition ($json.task_id -eq $fixtureTaskId) -Message "reconciliation must return the public task id"
   Assert-True -Condition ($json.status -eq "SUCCESS") -Message "reconciliation must return the task status"
   Assert-True -Condition ($json.token_name -eq $fixtureTokenName) -Message "reconciliation must return the non-secret token name"
-  Assert-True -Condition ([int64]$json.quota -eq 3780000) -Message "reconciliation must return final raw quota"
-  Assert-True -Condition ([decimal]$json.charged_cny -eq 7.56) -Message "reconciliation must convert quota to CNY"
-  Assert-True -Condition ([int64]$json.usage_tokens -eq 108000) -Message "reconciliation must return actual usage tokens"
+  Assert-True -Condition ([int64]$json.quota -eq 3815000) -Message "reconciliation must return final raw quota"
+  Assert-True -Condition ([decimal]$json.charged_cny -eq 7.63) -Message "reconciliation must convert quota to CNY"
+  Assert-True -Condition ([int64]$json.estimated_quota -eq 3780000) -Message "reconciliation must retain the submission estimate"
+  Assert-True -Condition ([decimal]$json.estimated_cny -eq 7.56) -Message "reconciliation must convert the submission estimate to CNY"
+  Assert-True -Condition ([int64]$json.estimated_usage_tokens -eq 108000) -Message "reconciliation must expose estimated usage separately"
+  Assert-True -Condition ([int64]$json.usage_tokens -eq 109000) -Message "reconciliation must prefer actual task usage over estimated snapshot usage"
+  Assert-True -Condition ($json.usage_source -eq "task.data.usage.completion_tokens") -Message "reconciliation must identify the actual usage source"
   Assert-True -Condition ($json.resolution -eq "720p") -Message "reconciliation must return the billed resolution"
   Assert-True -Condition ([decimal]$json.unit_price_cny_per_million -eq 70) -Message "reconciliation must select the 720p unit price"
-  Assert-True -Condition ([decimal]$json.recomputed_cny -eq 7.56) -Message "reconciliation must recompute CNY from usage"
+  Assert-True -Condition ([decimal]$json.recomputed_cny -eq 7.63) -Message "reconciliation must recompute CNY from actual usage"
   Assert-True -Condition ([decimal]$json.reconciliation_delta_cny -eq 0) -Message "reconciliation must report zero delta for matching billing"
   Assert-True -Condition (-not (($output | Out-String) -match [regex]::Escape($fixtureKey))) -Message "reconciliation output must not reveal token keys"
   Assert-True -Condition (-not (($output | Out-String) -match "private_data|result_url|upstream_task_id")) -Message "reconciliation output must not reveal private task fields"

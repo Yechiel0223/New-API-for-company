@@ -46,7 +46,18 @@ select json_build_object(
   'token_name',coalesce(tok.name,''),
   'quota',t.quota,
   'estimated_quota',coalesce(nullif(t.private_data->'billing_context'->'tiered_snapshot'->>'estimated_quota_after_group','')::numeric,0),
-  'usage_tokens',coalesce(nullif(t.private_data->'billing_context'->'tiered_snapshot'->'usage_facts'->>'tokens','')::numeric,0),
+  'estimated_usage_tokens',coalesce(nullif(t.private_data->'billing_context'->'tiered_snapshot'->'usage_facts'->>'tokens','')::numeric,0),
+  'usage_tokens',coalesce(
+    nullif(t.data->'usage'->>'completion_tokens','')::numeric,
+    nullif(t.data->'usage'->>'total_tokens','')::numeric,
+    nullif(t.private_data->'billing_context'->'tiered_snapshot'->'usage_facts'->>'tokens','')::numeric,
+    0
+  ),
+  'usage_source',case
+    when nullif(t.data->'usage'->>'completion_tokens','') is not null then 'task.data.usage.completion_tokens'
+    when nullif(t.data->'usage'->>'total_tokens','') is not null then 'task.data.usage.total_tokens'
+    else 'billing_snapshot_estimate'
+  end,
   'resolution',coalesce(t.private_data->'billing_context'->'tiered_snapshot'->'usage_facts'->>'resolution',''),
   'video_input',coalesce(t.private_data->'billing_context'->'tiered_snapshot'->'usage_facts'->>'video_input',''),
   'token_remain_quota',coalesce(tok.remain_quota,0),
@@ -106,7 +117,9 @@ $reconciliationDelta = [decimal]::Round($chargedCny - $recomputedCny, 6, [Midpoi
   charged_cny = $chargedCny
   estimated_quota = [int64]$data.estimated_quota
   estimated_cny = $estimatedCny
+  estimated_usage_tokens = [int64]$data.estimated_usage_tokens
   usage_tokens = [int64]$data.usage_tokens
+  usage_source = [string]$data.usage_source
   resolution = $resolution
   video_input = [string]$data.video_input
   unit_price_cny_per_million = $unitPrice
