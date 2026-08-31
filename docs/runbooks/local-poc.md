@@ -107,7 +107,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -Prompt "A red paper airplane flying smoothly across a clean white studio background, fixed camera, no text, no logo"
 ```
 
-脚本自动提交、轮询到终态，并把脱敏 JSON 写入已被 Git 忽略的 `artifacts/poc/`。文件保留任务 ID、画质、时长、状态和 actual tokens，只记录 `video_url_present`，不保存 Key、Authorization 或视频签名 URL。
+脚本自动提交、轮询到终态，并把脱敏 JSON 写入已被 Git 忽略的 `artifacts/poc/`。文件保留任务 ID、画质、时长、状态、actual tokens 和 `query_retry_count`，只记录 `video_url_present`，不保存 Key、Authorization 或视频签名 URL。任务查询阶段若遇到临时 HTTP 5xx，脚本会在总超时范围内继续 GET；不会重新 POST，因此不会因瞬时数据库或网关故障重复创建付费任务。提交 POST 本身失败时不会自动重试，因为客户端无法仅凭网络错误判断上游是否已经创建任务，必须先由管理员按时间和 Key 名称检查任务列表后再决定是否重提。
 
 拿到公开任务 ID 后执行对账：
 

@@ -494,7 +494,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 PASS seedance dry-run request
 PASS seedance official parameter boundaries
 PASS seedance missing-key validation
-PASS seedance submit, poll, and sanitized evidence
+PASS seedance submit, transient query retry, poll, and sanitized evidence
 PASS seedance reconciliation unknown-task behavior
 PASS seedance reconciliation CNY and usage behavior
 PASS seedance 1080p promotional reconciliation behavior
@@ -510,6 +510,7 @@ tasks|0
 2. PostgreSQL 夹具最初因 Windows→Docker 参数层改写保留字 `group` 的双引号而语法失败；该非关键列被移除。
 3. 直接传 JSON 字符串也被同一参数层改写；改为 PostgreSQL `json_build_object(...)` 原生构造。一次已创建但未进入清理块的测试 token（`id=4`、名称 `reconciliation-fixture`）随后被精确删除，最终复核临时 token/task 均为 0。
 4. 第一笔真实任务证明 `private_data.billing_context.tiered_snapshot.usage_facts.tokens` 保留提交时估算，而 actual usage 位于 `tasks.data.usage.completion_tokens`。旧对账脚本因此把 48,037.5 的估算误当 actual，并错误报告 ¥0.027965 差异；运行时任务 quota 和差额结算日志实际正确。新增“估算 108,000、actual 109,000”回归夹具，先观察失败，再改为优先读取 `tasks.data.usage.completion_tokens`、其次 `total_tokens`、最后才回退估算快照。真实任务复核后差异为 0。
+5. 720p / 30 秒真实任务轮询期间，PostgreSQL 容器发生一次干净重建，一次 GET 恰好在数据库约 2 秒不可用窗口内返回 500。任务本身仍在方舟运行，New API 后台轮询在数据库恢复后继续并完成差额结算。针对该事实新增“首次 GET 返回 500、第二次成功”的测试夹具，先观察脚本失败，再实现仅对查询阶段 5xx 的自动重试；断言实际请求序列必须为 `POST,GET,GET`，确保不会重复创建付费任务。脚本证据新增 `query_retry_count`。容器事件能证明重建发生，但不能从现有证据确定是谁或哪个进程发起，因此不做无依据归因。
 
 **结果哪里看**
 
@@ -526,9 +527,9 @@ tasks|0
 | 模式 | 分辨率 | 创建 | 终态 | actual usage | 账单核对 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 文生视频 | 480p | PASS | PASS | 48,437 tokens | ¥3.39059，差异 0 | PASS |
-| 文生视频 | 720p | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 文生视频 | 720p | PASS | PASS | 4 秒 87,300；5 秒 108,900；10 秒 216,900；30 秒 648,900 tokens | 四笔差异均为 0 | PASS |
 | 图生视频 | 720p | PENDING | PENDING | PENDING | PENDING | PENDING |
-| 文生视频能力探测 | 1080p | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 文生视频能力探测 | 1080p | PASS | PASS | 245,025 tokens | ¥13.584186，差异 0 | PASS |
 
 ## 7. 真实调用案例
 
@@ -584,27 +585,153 @@ tasks|0
 
 **结论：** 真实 480p 文生视频、视频产物、actual usage 差额结算和人民币对账全部通过，`POC-T2V-480P-5S-001` 为 `PASS`。
 
-### 7.2 720p 文生视频
+### 7.2 `POC-T2V-720P-5S-001`：720p / 5 秒文生视频
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-A`（`token_id=2`）
+
+**时间：** 2026-08-31 16:47:22 至 16:50:15（Asia/Shanghai），约 174 秒。
+
+**为什么测试：** 与 480p 案例保持相同提示词和 5 秒时长，只改变分辨率，验证 720p 路由、产物、actual usage 和 ¥70/百万 tokens 账单。
+
+**如何测试：** 使用 `scripts/test-seedance-text-video.ps1`，参数为 `-Resolution 720p -Duration 5`；完成后将公开任务 ID 传给 `scripts/show-seedance-reconciliation.ps1`。调用时仅通过进程环境变量传入 Key，执行结束立即移除。
+
+**预期结果：** 任务成功且存在视频；最终费用必须以 `usage.completion_tokens` 重算，New API 实扣和官方公式差异不超过 ¥0.000002。
+
+**实际结果与证据：**
+
+- 任务 ID：`task_0ebJokMerRTUVTH0EGQzLloZQJqjY3am`；终态 `SUCCESS`；`video_url_present=true`；
+- 脱敏证据：`artifacts/poc/seedance-task_0ebJokMerRTUVTH0EGQzLloZQJqjY3am.json`（Git 忽略）；
+- 估算 108,000 tokens，预占 ¥7.56；actual 108,900 tokens；
+- 最终实扣 `108900 × 70 / 1000000 = ¥7.623`，重算差异 ¥0；
+- 本任务结算后 Key A 剩余 ¥188.98641，累计已用 ¥11.01359。
+
+**副作用与清理：** 产生一条真实成功任务和 ¥7.623 方舟用量；任务与账单保留用于审计，不退款、不删除。完整 Key 与签名 URL未保存。
+
+**结论：** 创建、终态、产物、actual usage 和人民币对账全部通过。
+
+### 7.3 `POC-T2V-720P-4S-001`：720p / 4 秒最短时长
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-B`（`token_id=3`）
+
+**时间：** 2026-08-31 16:58:45 至 17:01:18（Asia/Shanghai），约 153 秒。
+
+**为什么测试：** 验证官方允许的 4 秒下边界可以通过网关创建、完成并按实际用量结算，同时开始验证第二把虚拟 Key 的独立归属和余额。
+
+**如何测试：** 使用与 5 秒案例相同提示词运行 `scripts/test-seedance-text-video.ps1 -Resolution 720p -Duration 4`，再使用对账脚本按任务 ID读取脱敏账单。
+
+**预期结果：** 4 秒请求被接受并成功生成；任务必须归属 Key B；费用按 ¥70/百万 actual tokens 结算，差异不超过一个 raw quota 点。
+
+**实际结果与证据：**
+
+- 任务 ID：`task_ppb1LyIKAx6T5F9osO09tS9pr9Ie74BD`；终态 `SUCCESS`；`video_url_present=true`；
+- 脱敏证据：`artifacts/poc/seedance-task_ppb1LyIKAx6T5F9osO09tS9pr9Ie74BD.json`（Git 忽略）；
+- 估算 86,400 tokens，预占 ¥6.048；actual 87,300 tokens；
+- 最终实扣 `87300 × 70 / 1000000 = ¥6.111`，重算差异 ¥0；
+- `token_id=3`、名称 `POC-seedance-B` 均正确；任务后 Key B 剩余 ¥193.889。
+
+**副作用与清理：** 产生一条真实成功任务和 ¥6.111 方舟用量；保留任务与账单审计记录。
+
+**结论：** 4 秒下边界、第二把 Key 归属、产物和人民币对账全部通过。
+
+### 7.4 `POC-T2V-720P-10S-001`：720p / 10 秒文生视频
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-B`（`token_id=3`）
+
+**时间：** 2026-08-31 17:01:58 至 17:04:47（Asia/Shanghai），约 168 秒。
+
+**为什么测试：** 在相同画质和提示词下增加输出时长，验证 token 用量、预占与最终扣费会随时长增长，并且较长任务仍能稳定轮询到终态。
+
+**如何测试：** 运行 `scripts/test-seedance-text-video.ps1 -Resolution 720p -Duration 10`，随后按任务 ID运行人民币对账脚本。
+
+**预期结果：** 任务成功并返回视频；actual usage 大于同条件 4/5 秒任务；实扣必须与官方 actual usage 公式完全一致或仅有一个 raw quota 点量化误差。
+
+**实际结果与证据：**
+
+- 任务 ID：`task_g5zFGbOqwtwaYL9XChDMLJUhYQ04C2pr`；终态 `SUCCESS`；`video_url_present=true`；
+- 脱敏证据：`artifacts/poc/seedance-task_g5zFGbOqwtwaYL9XChDMLJUhYQ04C2pr.json`（Git 忽略）；
+- 估算 216,000 tokens，预占 ¥15.12；actual 216,900 tokens；
+- 最终实扣 `216900 × 70 / 1000000 = ¥15.183`，重算差异 ¥0；
+- actual usage 高于同画质 4 秒和 5 秒案例；任务后 Key B 剩余 ¥178.706，累计已用 ¥21.294。
+
+**副作用与清理：** 产生一条真实成功任务和 ¥15.183 方舟用量；保留任务与账单审计记录。
+
+**结论：** 10 秒任务稳定完成，用量增长关系合理，actual usage 与人民币扣费完全一致。
+
+### 7.5 `POC-T2V-720P-30S-001`：720p / 30 秒最长时长与瞬时数据库中断恢复
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-B`（`token_id=3`）
+
+**时间：** 2026-08-31 17:05:43 至 17:10:29（Asia/Shanghai），约 286 秒。
+
+**为什么测试：** 验证官方允许的 30 秒上边界、最大时长下的预占与 actual usage 结算。真实执行中又遇到 PostgreSQL 短时重建，因此同时验证任务不会因一次本地查询 500 丢失或重复提交，数据库恢复后后台能够继续结算。
+
+**如何测试：** 使用同一提示词运行 `scripts/test-seedance-text-video.ps1 -Resolution 720p -Duration 30`。脚本已成功 POST 并持续 GET；17:08:54 的一次 GET 因数据库拒绝连接返回 500。没有重新 POST，而是先通过任务表和容器日志定位原任务，再在数据库恢复后使用相同任务 ID查询终态，并运行人民币对账脚本。随后以真实故障为夹具补齐查询 5xx 自动重试回归测试。
+
+**预期结果：** 30 秒请求成功产生视频；最终按 actual tokens 结算；瞬时本地查询失败不得导致第二次 POST、任务丢失、重复扣费或未结算。
+
+**实际结果与证据：**
+
+- 任务 ID：`task_O9uurate4hsEgYkmoFvEzWkwcEkyheL7`；终态 `SUCCESS`；`video_url_present=true`；
+- 脱敏证据：`artifacts/poc/seedance-task_O9uurate4hsEgYkmoFvEzWkwcEkyheL7.json`（Git 忽略）；该文件在故障恢复后由任务行和脱敏 API 结果重建，明确标记 `evidence_recovered_after_transient_query_error=true`；
+- 估算 648,000 tokens，预占 ¥45.36；actual 648,900 tokens；
+- 最终实扣 `648900 × 70 / 1000000 = ¥45.423`，重算差异 ¥0；
+- 任务后 Key B 剩余 ¥133.283，累计已用 ¥66.717；
+- New API 请求日志只出现一次该任务 POST；查询序列在 17:08:54 出现一次 500，17:10:02 恢复为 200；17:10:29 后台记录一次差额结算 `¥0.063`；
+- PostgreSQL 使用原有 named volume 恢复，任务、Key、余额和历史日志均未丢失；容器 `OOMKilled=false`，重建原因的发起方未能从事件记录确定。
+
+**脚本修复验证：** 本地 HTTP 夹具固定返回 `POST 200 → GET 500 → GET 200 succeeded`。修复前脚本在首次 GET 500 处失败；修复后输出 `query_retry_count=1`，请求日志严格为 `POST,GET,GET`，证明只恢复查询而不重复创建付费任务。
+
+**副作用与清理：** 产生一条真实成功任务和 ¥45.423 方舟用量；数据库容器发生一次计划外干净重建，但持久化数据未丢失。任务和账单保留；临时 HTTP 夹具已删除。
+
+**结论：** 30 秒上边界、actual usage 结算、数据库短时不可用后的任务恢复和防重复 POST 全部满足通过条件。
+
+### 7.6 720p 图生视频
 
 PENDING
 
-### 7.3 720p 图生视频
+### 7.7 `POC-T2V-1080P-5S-001`：1080p / 5 秒能力与活动价探测
+
+**状态：** `PASS`
+
+**虚拟 Key：** `POC-seedance-A`（`token_id=2`）
+
+**时间：** 2026-08-31 16:50:46 至 16:58:15（Asia/Shanghai），约 449 秒。
+
+**为什么测试：** 验证 Seedance 2.5 的 1080p 能力真实可用，并验证当前限时活动单价 ¥55.44/百万 tokens 已被正确应用，而不是错误使用 New API 旧倍率或刊例价 ¥77。
+
+**如何测试：** 使用同一提示词运行 `scripts/test-seedance-text-video.ps1 -Resolution 1080p -Duration 5`，随后用对账脚本读取任务的 actual usage、分辨率档位、最终 quota 和余额。
+
+**预期结果：** 任务成功、有视频产物；计费档位为 1080p 活动价；最终实扣与 `actual tokens × 55.44 / 1000000` 一致。
+
+**实际结果与证据：**
+
+- 任务 ID：`task_iwUUvEhIEongrQNXrRDRK8zdEPvPd0wW`；终态 `SUCCESS`；`video_url_present=true`；
+- 脱敏证据：`artifacts/poc/seedance-task_iwUUvEhIEongrQNXrRDRK8zdEPvPd0wW.json`（Git 忽略）；
+- 估算 243,000 tokens，预占 ¥13.47192；actual 245,025 tokens；
+- 最终实扣 `245025 × 55.44 / 1000000 = ¥13.584186`，重算差异 ¥0；
+- 本任务后 Key A 剩余 ¥175.402224，累计已用 ¥24.597776。
+
+**副作用与清理：** 产生一条真实成功任务和 ¥13.584186 方舟用量；任务与账单保留。活动价有截止时间，后续切价必须遵守 5.2 的停单 SOP。
+
+**结论：** 1080p 实际能力、视频产物、活动价分档和最终对账全部通过。
+
+### 7.8 同步拒绝与退款
 
 PENDING
 
-### 7.4 1080p 能力探测
-
-PENDING
-
-### 7.5 同步拒绝与退款
-
-PENDING
-
-### 7.6 终态失败与退款
+### 7.9 终态失败与退款
 
 PENDING；若无法安全、确定地复现，必须明确记录“not reproducible safely”，不得伪造证据。
 
-### 7.7 额度不足且未访问 Ark
+### 7.10 额度不足且未访问 Ark
 
 PENDING
 
@@ -617,6 +744,7 @@ PENDING
 ## 9. 重启恢复与结算幂等
 
 - 运行中任务在 New API 重启后继续：PENDING
+- 运行中任务在 PostgreSQL 干净重建、约 2 秒不可用后继续并完成一次结算：PASS，见 `POC-T2V-720P-30S-001`；这不能替代上面的 New API 重启测试
 - 同一终态任务重复查询 20 次余额不变：PENDING
 - 容器 stop/start 后任务、日志和余额仍存在：PENDING
 
@@ -633,9 +761,13 @@ PENDING
 
 | 案例 | 预估 usage | 预占 RMB | actual usage | 官方公式重算 RMB | 实扣 RMB | 差异 | 结果 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 720p 文生视频 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 480p / 5 秒文生视频 | 48,037.5 | ¥3.362626 | 48,437 | ¥3.39059 | ¥3.39059 | ¥0 | PASS |
+| 720p / 5 秒文生视频 | 108,000 | ¥7.56 | 108,900 | ¥7.623 | ¥7.623 | ¥0 | PASS |
+| 720p / 4 秒文生视频 | 86,400 | ¥6.048 | 87,300 | ¥6.111 | ¥6.111 | ¥0 | PASS |
+| 720p / 10 秒文生视频 | 216,000 | ¥15.12 | 216,900 | ¥15.183 | ¥15.183 | ¥0 | PASS |
+| 720p / 30 秒文生视频 | 648,000 | ¥45.36 | 648,900 | ¥45.423 | ¥45.423 | ¥0 | PASS |
 | 720p 图生视频 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| 1080p 探测 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| 1080p / 5 秒探测 | 243,000 | ¥13.47192 | 245,025 | ¥13.584186 | ¥13.584186 | ¥0 | PASS |
 
 允许的最大舍入差为一个 raw quota 点，即 `¥0.000002`。最终费用不得高于保守预占。
 

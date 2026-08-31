@@ -74,6 +74,7 @@ if (-not $DryRun) {
   $queryEndpoint = $endpoint + "/" + [uri]::EscapeDataString($taskId)
   $terminalStatuses = @("succeeded", "failed", "expired", "cancelled")
   $task = $null
+  $queryRetryCount = 0
 
   while ($true) {
     if (([DateTime]::UtcNow - $startedAt).TotalSeconds -ge $TimeoutSeconds) {
@@ -86,6 +87,14 @@ if (-not $DryRun) {
     try {
       $task = Invoke-RestMethod -Uri $queryEndpoint -Method Get -Headers $headers
     } catch {
+      $statusCode = $null
+      if ($null -ne $_.Exception.Response) {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+      }
+      if ($statusCode -ge 500 -and $statusCode -le 599) {
+        $queryRetryCount++
+        continue
+      }
       throw "Seedance query failed: $($_.Exception.Message)"
     }
 
@@ -115,6 +124,7 @@ if (-not $DryRun) {
     completion_tokens = $completionTokens
     total_tokens = $totalTokens
     video_url_present = $videoUrlPresent
+    query_retry_count = $queryRetryCount
   }
 
   $outputFullPath = [System.IO.Path]::GetFullPath($OutputDirectory)

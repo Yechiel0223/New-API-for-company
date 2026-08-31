@@ -86,6 +86,7 @@ try {
   $fixturePath = Join-Path $testDirectory "fixture.py"
   $readyPath = Join-Path $testDirectory "ready"
   $requestBodyPath = Join-Path $testDirectory "request.json"
+  $requestLogPath = Join-Path $testDirectory "requests.log"
   $stdoutPath = Join-Path $testDirectory "fixture.stdout"
   $stderrPath = Join-Path $testDirectory "fixture.stderr"
   @'
@@ -97,22 +98,33 @@ from pathlib import Path
 port = int(sys.argv[1])
 ready_path = Path(sys.argv[2])
 request_body_path = Path(sys.argv[3])
+request_log_path = Path(sys.argv[4])
 
 class Handler(BaseHTTPRequestHandler):
-    def send_json(self, payload):
+    get_count = 0
+
+    def send_json(self, payload, status=200):
         body = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_POST(self):
+        with request_log_path.open("a", encoding="utf-8") as request_log:
+            request_log.write("POST\n")
         length = int(self.headers.get("Content-Length", "0"))
         request_body_path.write_bytes(self.rfile.read(length))
         self.send_json({"id": "task_test_123", "status": "queued"})
 
     def do_GET(self):
+        with request_log_path.open("a", encoding="utf-8") as request_log:
+            request_log.write("GET\n")
+        Handler.get_count += 1
+        if Handler.get_count == 1:
+            self.send_json({"error": {"message": "temporary database outage"}}, 500)
+            return
         self.send_json({
             "id": "task_test_123",
             "status": "succeeded",
@@ -128,14 +140,14 @@ class Handler(BaseHTTPRequestHandler):
 
 server = HTTPServer(("127.0.0.1", port), Handler)
 ready_path.write_text("ready", encoding="utf-8")
-for _ in range(2):
+for _ in range(3):
     server.handle_request()
 server.server_close()
 '@ | Set-Content -LiteralPath $fixturePath -Encoding utf8
 
   $serverProcess = Start-Process `
     -FilePath "python.exe" `
-    -ArgumentList @($fixturePath, [string]$port, $readyPath, $requestBodyPath) `
+    -ArgumentList @($fixturePath, [string]$port, $readyPath, $requestBodyPath, $requestLogPath) `
     -RedirectStandardOutput $stdoutPath `
     -RedirectStandardError $stderrPath `
     -WindowStyle Hidden `
@@ -169,14 +181,17 @@ server.server_close()
     Assert-True -Condition ($liveJson.task_id -eq "task_test_123") -Message "live mode must return the public task id"
     Assert-True -Condition ([int]$liveJson.completion_tokens -eq 108000) -Message "live mode must return actual completion tokens"
     Assert-True -Condition ($liveJson.video_url_present -eq $true) -Message "live mode must record that a video URL exists"
+    Assert-True -Condition ([int]$liveJson.query_retry_count -eq 1) -Message "live mode must report one transient query retry"
     Assert-True -Condition (Test-Path -LiteralPath $liveJson.evidence_path -PathType Leaf) -Message "live mode must save a sanitized evidence file"
 
     $evidence = Get-Content -Raw -LiteralPath $liveJson.evidence_path
     Assert-True -Condition (-not ($evidence -match "test-secret-must-not-appear")) -Message "evidence must not reveal the API key"
     Assert-True -Condition (-not ($evidence -match "media\.example|do-not-store")) -Message "evidence must not save the signed video URL"
     Assert-True -Condition (($evidence | ConvertFrom-Json).completion_tokens -eq 108000) -Message "evidence must retain actual completion tokens"
+    $requestSequence = @((Get-Content -LiteralPath $requestLogPath)) -join ","
+    Assert-True -Condition ($requestSequence -eq "POST,GET,GET") -Message "a transient query 5xx must retry GET without submitting another POST"
 
-    "PASS seedance submit, poll, and sanitized evidence"
+    "PASS seedance submit, transient query retry, poll, and sanitized evidence"
   } finally {
     if (-not $serverProcess.HasExited) {
       Stop-Process -Id $serverProcess.Id -Force
