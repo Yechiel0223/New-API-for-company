@@ -23,6 +23,16 @@ $envPath = Join-Path $repoRoot "deploy\.env"
 Assert-True -Condition (Test-Path -LiteralPath $composePath) -Message "deploy/compose.yaml must exist"
 Assert-True -Condition (Test-Path -LiteralPath $envPath) -Message "deploy/.env must exist"
 
+$renderedConfig = docker compose --env-file $envPath -f $composePath config --format json | ConvertFrom-Json -Depth 100
+$postgresPorts = @($renderedConfig.services.postgres.ports)
+Assert-True -Condition ($postgresPorts.Count -eq 1) -Message "PostgreSQL must publish exactly one port for local DataGrip"
+$postgresPort = $postgresPorts[0]
+Assert-True -Condition (
+  [string]$postgresPort.host_ip -eq "127.0.0.1" -and
+  [int]$postgresPort.target -eq 5432 -and
+  [int]$postgresPort.published -eq 5432
+) -Message "PostgreSQL must bind only 127.0.0.1:5432 to container port 5432"
+
 $validOutput = & $scriptPath -ComposePath $composePath -EnvPath $envPath
 Assert-True -Condition ($LASTEXITCODE -eq 0) -Message "the approved local Compose config must pass"
 Assert-True -Condition (-not (($validOutput | Out-String) -match "POSTGRES_PASSWORD|SESSION_SECRET|SQL_DSN")) -Message "verification output must not reveal environment values"

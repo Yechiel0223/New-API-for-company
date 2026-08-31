@@ -48,6 +48,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml start
 - 管理员页面：`http://localhost:3000`
 - 员工调用用 API Base URL：`http://localhost:3000`
 - 健康状态：`http://localhost:3000/api/status`
+- DataGrip 本机连接：`127.0.0.1:5432/new_api`，详细步骤见 [`datagrip-local.md`](./datagrip-local.md)
 
 本机 POC 不配置域名和 HTTPS。迁移到云服务器时必须另行配置 HTTPS、反向代理、防火墙与备份，不能直接照搬本机 HTTP 边界。
 

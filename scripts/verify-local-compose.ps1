@@ -66,8 +66,13 @@ $newApiPort = $newApiPorts[0]
 if ([string]$newApiPort.host_ip -ne "127.0.0.1" -or [int]$newApiPort.target -ne 3000 -or [int]$newApiPort.published -ne 3000) {
   throw "New API must bind only 127.0.0.1:3000 to container port 3000"
 }
-if (($postgres.PSObject.Properties.Name -contains "ports") -and $null -ne $postgres.ports -and @($postgres.ports).Count -gt 0) {
-  throw "PostgreSQL must not publish a host port"
+$postgresPorts = @($postgres.ports)
+if ($postgresPorts.Count -ne 1) {
+  throw "PostgreSQL must publish exactly one port for local DataGrip"
+}
+$postgresPort = $postgresPorts[0]
+if ([string]$postgresPort.host_ip -ne "127.0.0.1" -or [int]$postgresPort.target -ne 5432 -or [int]$postgresPort.published -ne 5432) {
+  throw "PostgreSQL must bind only 127.0.0.1:5432 to container port 5432"
 }
 "PASS ports"
 
