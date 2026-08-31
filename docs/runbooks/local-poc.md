@@ -69,6 +69,66 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml start
 
 第一阶段不做充值流水、人工扣减或冲正；余额管理就是管理员设置绝对值。
 
+## Seedance 2.5 文生视频测试脚本
+
+先执行完全本地、不会访问方舟的脚本测试：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/tests/test-seedance-text-video.tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/tests/show-seedance-reconciliation.tests.ps1
+```
+
+只检查请求、不产生费用时使用 Dry Run：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/test-seedance-text-video.ps1 `
+  -DryRun -Resolution 720p -Duration 5 `
+  -Prompt "A red paper airplane flying smoothly across a clean white studio background, fixed camera, no text, no logo"
+```
+
+真实测试前，在当前 PowerShell 会话安全输入一把 **New API 虚拟 Key**。不要输入方舟真实 Key，不要把 Key 写进命令、脚本或文档：
+
+```powershell
+$pocSecureKey = Read-Host "New API virtual Key" -AsSecureString
+$pocCredential = [pscredential]::new("unused", $pocSecureKey)
+$env:NEW_API_KEY = $pocCredential.GetNetworkCredential().Password
+```
+
+单次真实任务：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/test-seedance-text-video.ps1 `
+  -Resolution 720p -Duration 5 `
+  -Prompt "A red paper airplane flying smoothly across a clean white studio background, fixed camera, no text, no logo"
+```
+
+脚本自动提交、轮询到终态，并把脱敏 JSON 写入已被 Git 忽略的 `artifacts/poc/`。文件保留任务 ID、画质、时长、状态和 actual tokens，只记录 `video_url_present`，不保存 Key、Authorization 或视频签名 URL。
+
+拿到公开任务 ID 后执行对账：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/show-seedance-reconciliation.ps1 `
+  -TaskId "task_替换为公开任务ID" `
+  -ComposePath deploy/compose.yaml `
+  -EnvPath deploy/.env
+```
+
+对账脚本输出最终 raw quota、人民币扣费、actual tokens、分辨率、适用单价、重新计算的人民币和差额；它只选择必要数据库字段，不读取完整 `private_data` 或任何 Key。
+
+完成后清除当前进程中的虚拟 Key：
+
+```powershell
+Remove-Item Env:NEW_API_KEY -ErrorAction SilentlyContinue
+Remove-Variable pocSecureKey,pocCredential -ErrorAction SilentlyContinue
+```
+
+本 POC 的受控真实矩阵使用同一提示词隔离变量：`POC-seedance-A` 运行 480p/5 秒、720p/5 秒、1080p/5 秒以比较画质；`POC-seedance-B` 运行 720p/4 秒、720p/10 秒、720p/30 秒以覆盖最短、常用和最长时长。若某组合暴露新问题，再补充有针对性的组合，不用无差别重复同一断言。
+
 ## Seedance 2.5 限时价格切换 SOP
 
 当前官方价格页声明：1080p 在 2026-08-14 14:00 至 2026-09-17 14:00（Asia/Shanghai）按刊例价 72 折，480p/720p 不参与折扣。切换到刊例价时不得让新旧价格与运行中任务交叉：

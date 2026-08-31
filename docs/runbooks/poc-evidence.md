@@ -397,6 +397,129 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 **结论：** 渠道类型、Base URL、唯一模型白名单、启用状态与密钥存在性全部符合预期，`POC-ARK-CHANNEL-001` 为 `PASS`。这只证明本地配置正确，不证明真实 Key 权限或方舟接口连通；后者必须由后续真实任务测试验证。
 
+### 5.6 `POC-VIRTUAL-KEY-001`：两把独立虚拟 Key 的创建与配置
+
+**状态：** `PASS`
+
+**测试时间：** 2026-08-31 16:17:32 +08:00
+
+**是否访问方舟/产生费用：** 否。创建与核验只修改、读取本地 PostgreSQL，没有发起模型请求。
+
+**为什么测试**
+
+证明管理员可以按员工创建独立虚拟 Key，并为每把 Key 单独设置人民币额度、模型白名单、启停状态和有效期。后续日志与用量表含 `token_id`/`token_name`，因此两把 Key 可以分别对账。
+
+**如何测试**
+
+1. 用户在“API 密钥”页面手工创建两把 Key，数量均为 `1`，避免批量创建自动添加随机后缀。
+2. 关闭“无限配额”，每把输入人民币额度 `200`；页面按当前 `QuotaPerUnit=500000` 保存为 `100,000,000` raw quota。
+3. 有效期选择“永不”，模型限制只选择 `doubao-seedance-2-5-260628`，IP 白名单留空。
+4. 保存后刷新页面，核对两个非秘密名称均出现。
+5. 用下方 SQL 只读取配置字段和 `key_present` 布尔值，不读取 `key` 原文。
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
+  psql -U new_api -d new_api -F '|' -Atc "select id,name,status,remain_quota,used_quota,unlimited_quota,expired_time,model_limits_enabled,model_limits,(key is not null and length(key)>0) as key_present from tokens where name in ('POC-seedance-A','POC-seedance-B') and deleted_at is null order by name;"
+```
+
+**预期结果**
+
+- 两把 Key 均存在并启用，且各有非空密钥；
+- `remain_quota=100000000`，即 `¥200`；
+- `used_quota=0`、`unlimited_quota=false`；
+- `expired_time=-1`，即永不过期；
+- 模型限制已启用，且只允许 Seedance 2.5。
+
+**实际结果**
+
+```text
+2|POC-seedance-A|1|100000000|0|f|-1|t|doubao-seedance-2-5-260628|t
+3|POC-seedance-B|1|100000000|0|f|-1|t|doubao-seedance-2-5-260628|t
+```
+
+页面刷新后两个名称各出现一次。用户实际输入的名称为 `POC-seedance-A/B`，与操作说明中的 `POC-Seedance-A/B` 只有字母大小写差异，不影响 Key 身份、路由、额度或日志归属，因此保留实际名称，不做无必要重命名。第一次按说明中的大小写精确查询返回零行；改为实际名称后查询成功，该偏差没有改变任何数据。
+
+**结果哪里看**
+
+- 管理员页面：`http://localhost:3000/keys`；
+- 权威持久化：PostgreSQL `tokens` 表，使用上方脱敏 SQL；
+- 单 Key 用量：后续真实任务完成后查看管理员用量日志中的 Key 名称，并按 `token_id` 对账。
+
+**副作用与清理：** 新增两把启用状态的 POC 虚拟 Key，每把初始额度 ¥200。完整 Key 未写入聊天、终端输出、Git 或本文档。两把 Key 需保留用于后续隔离、余额与真实任务测试，暂不清理。
+
+**结论：** 两把 Key 的独立额度、模型白名单、有效期、启用状态与密钥存在性全部符合预期，`POC-VIRTUAL-KEY-001` 为 `PASS`。本节只证明本地 Key 管理正确，尚未证明真实请求能按 Key 路由和扣费。
+
+### 5.7 `POC-TEST-SCRIPTS-001`：文生视频调用与人民币对账脚本
+
+**状态：** `PASS`
+
+**测试时间：** 2026-08-31 16:37:57 +08:00
+
+**是否访问方舟/产生费用：** 否。本节使用 Dry Run、本机临时 HTTP 服务和临时 PostgreSQL 夹具验证脚本；真实任务另建测试编号。
+
+**为什么测试**
+
+后续会执行多个付费任务。如果靠临时命令手工提交和抄账，容易泄露 Key、保存视频签名 URL、混淆预估和 actual usage，或无法复现。因此先固化一条可重复、默认脱敏的调用与对账路径。
+
+**实现文件**
+
+- `scripts/test-seedance-text-video.ps1`：固定精确 Model ID，只接受 480p/720p/1080p、4–30 秒；支持 Dry Run；真实模式从进程环境变量读取虚拟 Key，提交后轮询到终态并保存脱敏证据。
+- `scripts/show-seedance-reconciliation.ps1`：按公开任务 ID 只读查询必要字段，按 `quota / 500000` 换算人民币，再按 actual tokens 和当前分辨率单价重算。
+- `scripts/tests/test-seedance-text-video.tests.ps1`：验证请求构造、官方参数边界、缺少 Key、真实 HTTP 提交/轮询和证据脱敏。
+- `scripts/tests/show-seedance-reconciliation.tests.ps1`：验证未知任务、720p ¥70 档和 1080p 当前 ¥55.44 活动价档；临时数据库数据在 `finally` 清理。
+
+**如何测试**
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/tests/test-seedance-text-video.tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/tests/show-seedance-reconciliation.tests.ps1
+```
+
+**预期结果**
+
+- Dry Run 生成正确 endpoint、Model ID、文本内容、画质和时长，且不输出 Key；
+- 4K、3 秒和 31 秒在请求前被拒绝；
+- 真实模式缺少 `NEW_API_KEY` 时在网络请求前被拒绝；
+- 本地 HTTP 夹具返回成功终态后，脚本保留 `completion_tokens=108000` 和 `video_url_present=true`，但证据中没有 Key 或签名 URL；
+- 未知任务明确返回 `Task not found`；
+- 720p 夹具：108,000 tokens、3,780,000 quota、¥7.56、重算差额 0；
+- 1080p 活动价夹具：243,000 tokens、6,735,960 quota、¥13.47192、重算差额 0；
+- 测试完成后数据库临时 token/task 均为 0。
+
+**实际结果**
+
+```text
+PASS seedance dry-run request
+PASS seedance official parameter boundaries
+PASS seedance missing-key validation
+PASS seedance submit, poll, and sanitized evidence
+PASS seedance reconciliation unknown-task behavior
+PASS seedance reconciliation CNY and usage behavior
+PASS seedance 1080p promotional reconciliation behavior
+tokens|0
+tasks|0
+```
+
+全部断言通过。各生产行为均先观察到预期红灯，再写最小实现变绿。
+
+**偏差与排障记录**
+
+1. 第一版本地 HTTP 夹具在 Windows PowerShell 5.1 使用 `Start-Job` + 阻塞 `AcceptTcpClient()`，清理时 `Stop-Job` 卡住；最小复现证明 PowerShell 7 可停止而 5.1 不可靠。诊断进程被终止，夹具改为隐藏运行、处理两次请求后自行退出的 Python 本地进程，生产脚本未因此改变。
+2. PostgreSQL 夹具最初因 Windows→Docker 参数层改写保留字 `group` 的双引号而语法失败；该非关键列被移除。
+3. 直接传 JSON 字符串也被同一参数层改写；改为 PostgreSQL `json_build_object(...)` 原生构造。一次已创建但未进入清理块的测试 token（`id=4`、名称 `reconciliation-fixture`）随后被精确删除，最终复核临时 token/task 均为 0。
+
+**结果哪里看**
+
+- 自动化断言：两个 `scripts/tests/*.tests.ps1` 文件及上方最终输出；
+- 真实调用脱敏证据：后续产生于 Git 忽略目录 `artifacts/poc/`；
+- 操作步骤：[`local-poc.md`](./local-poc.md) 的“Seedance 2.5 文生视频测试脚本”。
+
+**副作用与清理：** 新增两个运行脚本和两个测试脚本；测试只使用本机回环 HTTP 与已清理的数据库夹具。没有创建方舟任务、没有产生费用、没有留下临时 token/task，也没有写入任何真实 Key。
+
+**结论：** 调用、轮询、参数限制、脱敏证据和人民币对账路径具备可重复的本地测试证据，`POC-TEST-SCRIPTS-001` 为 `PASS`。下一步才可用两把 POC 虚拟 Key 执行受控真实矩阵。
+
 ## 6. 能力矩阵
 
 | 模式 | 分辨率 | 创建 | 终态 | actual usage | 账单核对 | 结论 |
