@@ -946,6 +946,7 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }
 	insertTaskPluginRouteTask(t, &model.Task{
 		TaskID: "task-a", UserId: 7, Platform: constant.TaskPlatform("route-query-test"),
 		Status: model.TaskStatusSuccess, Progress: "100%", CreatedAt: 10,
+		PrivateData: model.TaskPrivateData{TokenId: 42},
 	})
 	taskData, err := common.Marshal(map[string]any{
 		"task_id": "private-upstream-id",
@@ -955,7 +956,7 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }
 	insertTaskPluginRouteTask(t, &model.Task{
 		TaskID: "task-b", UserId: 7, Platform: constant.TaskPlatform("route-query-test"),
 		Status: model.TaskStatusInProgress, Progress: "50%", CreatedAt: 20, Data: taskData,
-		ChannelId: 999, Quota: 12345, PrivateData: model.TaskPrivateData{UpstreamTaskID: "private-upstream-id", Key: "secret"},
+		ChannelId: 999, Quota: 12345, PrivateData: model.TaskPrivateData{UpstreamTaskID: "private-upstream-id", Key: "secret", TokenId: 42},
 	})
 
 	nextHandlerCalled := false
@@ -964,6 +965,7 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }
 		pinTaskPluginRoute(plugin, 0),
 		func(c *gin.Context) {
 			c.Set("id", 7)
+			c.Set("token_id", 42)
 			c.Next()
 		},
 		PrepareTaskPluginRoute(),
@@ -1063,6 +1065,14 @@ export const native = {status: function(ctx, task) { return {id: task.task_id}; 
 	})
 	insertTaskPluginRouteTask(t, &model.Task{
 		TaskID: "legacy-task", UserId: 7, Platform: constant.TaskPlatform("651"),
+		PrivateData: model.TaskPrivateData{TokenId: 42},
+	})
+	insertTaskPluginRouteTask(t, &model.Task{
+		TaskID: "same-user-foreign-token", UserId: 7, Platform: constant.TaskPlatform("route-static-query-test"),
+		PrivateData: model.TaskPrivateData{TokenId: 99},
+	})
+	insertTaskPluginRouteTask(t, &model.Task{
+		TaskID: "same-user-tokenless", UserId: 7, Platform: constant.TaskPlatform("route-static-query-test"),
 	})
 
 	router := gin.New()
@@ -1070,6 +1080,7 @@ export const native = {status: function(ctx, task) { return {id: task.task_id}; 
 		pinTaskPluginRoute(plugin, 0),
 		func(c *gin.Context) {
 			c.Set("id", 7)
+			c.Set("token_id", 42)
 			c.Next()
 		},
 		PrepareTaskPluginRoute(),
@@ -1081,7 +1092,7 @@ export const native = {status: function(ctx, task) { return {id: task.task_id}; 
 	assert.JSONEq(t, `{"id":"legacy-task"}`, legacyRecorder.Body.String())
 
 	var firstBody string
-	for _, taskID := range []string{"missing-task", "foreign-task", "wrong-platform", "wrong-legacy-platform"} {
+	for _, taskID := range []string{"missing-task", "foreign-task", "wrong-platform", "wrong-legacy-platform", "same-user-foreign-token", "same-user-tokenless"} {
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/vendor/jobs/"+taskID, nil))
 		assert.Equal(t, http.StatusNotFound, recorder.Code)

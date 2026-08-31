@@ -1153,6 +1153,14 @@ func renderTaskPluginQuery(
 		abortTaskPluginRouteError(c, http.StatusInternalServerError)
 		return
 	}
+	tokenID := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
+	accessibleTasks := tasks[:0]
+	for _, task := range tasks {
+		if tokenID > 0 && task.PrivateData.TokenId == tokenID {
+			accessibleTasks = append(accessibleTasks, task)
+		}
+	}
+	tasks = accessibleTasks
 	logger.LogDebug(
 		c,
 		"task_plugin subsystem=query event=lookup_complete generation=%d plugin=%q requested=%d found=%d",
