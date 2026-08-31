@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0 -or -not $renderedJson) {
 }
 
 try {
-  $config = ($renderedJson | Out-String) | ConvertFrom-Json -Depth 100
+  $config = ($renderedJson | Out-String) | ConvertFrom-Json
 } catch {
   throw "Docker Compose returned invalid JSON"
 }

@@ -23,7 +23,7 @@ $envPath = Join-Path $repoRoot "deploy\.env"
 Assert-True -Condition (Test-Path -LiteralPath $composePath) -Message "deploy/compose.yaml must exist"
 Assert-True -Condition (Test-Path -LiteralPath $envPath) -Message "deploy/.env must exist"
 
-$renderedConfig = docker compose --env-file $envPath -f $composePath config --format json | ConvertFrom-Json -Depth 100
+$renderedConfig = docker compose --env-file $envPath -f $composePath config --format json | ConvertFrom-Json
 $postgresPorts = @($renderedConfig.services.postgres.ports)
 Assert-True -Condition ($postgresPorts.Count -eq 1) -Message "PostgreSQL must publish exactly one port for local DataGrip"
 $postgresPort = $postgresPorts[0]
@@ -45,7 +45,7 @@ try {
   $invalidComposePath = Join-Path $testDirectory "compose-with-redis.yaml"
   $validCompose = Get-Content -Raw -LiteralPath $composePath
   $invalidCompose = $validCompose -replace "(?m)^services:\s*$", "services:`n  redis:`n    image: redis:7-alpine"
-  $invalidCompose | Set-Content -LiteralPath $invalidComposePath -Encoding utf8NoBOM
+  $invalidCompose | Set-Content -LiteralPath $invalidComposePath -Encoding UTF8
 
   $redisAccepted = $false
   try {
