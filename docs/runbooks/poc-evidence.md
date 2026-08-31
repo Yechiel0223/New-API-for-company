@@ -2,6 +2,30 @@
 
 > 本文件只记录脱敏后的结果、时间、摘要和计算过程。严禁记录火山方舟真实 API Key、任何虚拟 Key、管理员密码、数据库密码、会话密钥、Authorization 请求头或本机代理地址。
 
+## 0. 如何阅读与复核本文件
+
+本文件是本机 POC **所有测试结果的统一入口和权威索引**。后续每项测试都必须有唯一编号，并至少记录以下内容：
+
+1. **为什么测试**：该测试验证什么风险或验收条件。
+2. **前置条件**：测试依赖的配置、数据与服务状态。
+3. **如何测试**：可由另一名开发者重复执行的页面操作、API 请求或脱敏命令。
+4. **预期结果**：执行前定义的通过条件。
+5. **实际结果**：观察值、时间和 `PASS`、`FAIL`、`BLOCKED` 或 `NOT RUN` 结论。
+6. **结果哪里看**：对应的管理员页面、数据库查询、容器日志或本文件章节。
+7. **副作用与清理**：是否创建 Key/任务/数据，是否访问付费上游，产生多少费用，清理后还保留什么审计痕迹。
+8. **偏差与限制**：操作与原计划不一致、无法安全复现或证据不足时如实记录，不得把推测写成通过。
+
+状态含义：
+
+| 状态 | 含义 |
+| --- | --- |
+| `PASS` | 实际结果满足预先定义的全部通过条件，且证据可复核 |
+| `FAIL` | 已执行，但至少一个通过条件不满足 |
+| `BLOCKED` | 因缺少必要配置、权限或外部条件而未能完成 |
+| `NOT RUN` | 尚未执行，不代表通过或失败 |
+
+真实调用会额外记录：脱敏任务 ID、虚拟 Key 的非秘密名称、上游终态、actual usage、预占人民币、最终扣费人民币和费用重算过程。完整 Key、带签名的输出 URL 和认证请求头永不写入证据。若测试可能访问火山方舟并产生费用，会在执行前明确标注；本 POC 已获准进行付费能力测试，但该授权不改变密钥脱敏要求。
+
 ## 1. 环境
 
 | 项目 | 结果 | 证据时间（Asia/Shanghai） |
@@ -132,12 +156,188 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
 
 ## 5. 官方价格与能力来源
 
-- 核对时间：PENDING
-- 官方来源：PENDING
-- 模型：`doubao-seedance-2-5-260628`
-- 官方价格维度与人民币单价：PENDING
-- 合法时长、分辨率、比例和图像输入限制：PENDING
-- 预占计算及一 quota 点（`¥0.000002`）舍入示例：PENDING
+### 5.1 `POC-ARK-DOC-001`：官方模型能力与价格口径核对
+
+**测试时间：** 2026-08-31 15:45:29 +08:00
+
+**执行方式：** 只读访问火山引擎官方文档，没有登录公司方舟账号，没有访问 API，没有产生费用。
+
+**证据位置：** 本节及下列官方页面。
+
+- [火山方舟模型列表](https://docs.volcengine.com/docs/82379/1330310?lang=zh)，页面最近更新时间 `2026.08.24 21:58:51`；
+- [火山方舟模型价格](https://docs.volcengine.com/docs/82379/1544106?lang=zh)，页面最近更新时间 `2026.08.28 00:06:09`。
+
+**为什么测试**
+
+模型 ID、可用分辨率、时长和价格都会变化。若依据第三方页面、旧版插件常量或模型名称猜测配置，虚拟 Key 余额可能与方舟真实账单不一致。因此所有计费配置必须先以当前官方文档为准，并保留核对时间。
+
+**如何测试与预期结果**
+
+1. 在官方模型列表定位 Doubao Seedance 2.5，核对完整 Model ID、输入模式、分辨率、帧率、时长、格式和在线限流。
+2. 在官方模型价格定位同一模型，核对在线推理人民币单价、限时优惠区间、计费公式、最终用量字段和失败计费规则。
+3. 预期 Model ID 与 New API 插件声明完全一致；所有启用能力都有官方依据；价格单位必须是人民币/百万 token。
+
+**实际结果**
+
+| 断言 | 官方页面实际值 | 结果 |
+| --- | --- | --- |
+| 完整 Model ID | `doubao-seedance-2-5-260628` | PASS |
+| 模式 | 文生视频、首帧生视频、首尾帧生视频、全模态参考生视频等 | PASS；第一阶段只验收文生视频与图生视频 |
+| 分辨率 | 480p（8bit）、720p（8bit）、1080p（10bit） | PASS；2.5 不支持 4K |
+| 帧率 | 24 fps | PASS |
+| 输出时长 | 4–30 秒 | PASS |
+| 输出格式 | mp4、mov | PASS |
+| 企业在线限流 | 最大 600 RPM，最大并发 10 | PASS；真实账号归类仍以公司控制台为准 |
+| 480p/720p，无视频输入 | `¥70.00 / 百万 token` | PASS |
+| 480p/720p，包含视频输入 | `¥42.00 / 百万 token` | PASS |
+| 1080p，无视频输入 | 刊例价 `¥77.00 / 百万 token` | PASS |
+| 1080p，包含视频输入 | 刊例价 `¥46.00 / 百万 token` | PASS |
+| 1080p 当前优惠 | 2026-08-14 14:00 至 2026-09-17 14:00（UTC+8）按刊例价 72 折，即 `¥55.44` / `¥33.12` 每百万 token | PASS |
+| 费用公式 | 单价 × token 用量 | PASS |
+| token 估算 | `(输入视频时长 + 输出视频时长) × 输出宽 × 输出高 × 24 / 1024` | PASS |
+| 最终权威用量 | API 返回的 `usage.completion_tokens` | PASS |
+| 失败任务 | 仅成功生成的视频计费；审核等原因失败不收费 | PASS |
+| 含视频输入最低用量 | 存在最低 token 用量，准确值最终仍以 API usage 为准 | PASS；第一阶段不验收视频生视频 |
+
+**结论：** `PASS`。官方资料足以确认第一阶段的模型 ID、文生/图生能力、720p 价格和 1080p 探测价格。第一阶段明确不支持、不配置、不验收视频作为输入；图像输入不等于“包含视频输入”，因此图生视频使用“输入不含视频”单价。4K 必须视为不支持，不能因 New API 通用表单或插件枚举中出现 4K 就对员工宣称可用。
+
+**副作用与清理：** 无。本测试没有创建或修改运行数据，不产生方舟费用。
+
+### 5.2 `POC-BILLING-CODE-001`：New API 内置计费路径适配性审查
+
+**测试时间：** 2026-08-31
+
+**检查位置：** `plugins/tasks/doubao/plugin.js`、`relay/relay_task.go`、`pkg/billingexpr/expr.md`。
+
+**证据位置：** 本节；后续实际表达式保存和结算结果会另建测试编号。
+
+**为什么测试**
+
+需要证明 New API 是按方舟实际 usage 结算，而不是只按请求时长估算；还要确认旧倍率常量是否能精确覆盖当前人民币价格和限时优惠。
+
+**检查方法**
+
+1. 检查 Doubao 插件提交时如何估算 token、完成后读取哪个 usage 字段。
+2. 检查分辨率和视频输入倍率常量是否与 5.1 的官方价格完全一致。
+3. 沿任务计费链路核对预占、终态重算和退款能力。
+4. 检查已有的任务用量表达式能否读取 `tokens`、`resolution`、`video_input` 三个插件事实，并在完成时用 actual usage 覆盖估算值。
+
+**实际结果**
+
+| 检查项 | 实际观察 | 结果 |
+| --- | --- | --- |
+| 提交时 token 估算 | 插件按 `秒 × 宽 × 高 × 24 / 1024` 估算 | PASS |
+| 终态 actual usage | 成功时优先读取 `usage.completion_tokens`，缺失时才回退 `total_tokens` | PASS |
+| 失败终态 | 完成用量钩子不返回收费事实，任务结算链路具备退款能力 | PASS；仍需真实失败测试验证 |
+| 480p/720p 旧倍率 | 无视频 `1`，含视频 `42/70`，与刊例价比例一致 | PASS |
+| 1080p 旧倍率 | 使用 `11.7/10.7` 与 `7.0/10.7`，既不精确等于中国区刊例价 `77/70`、`46/70`，也不含当前 72 折 | FAIL |
+| 4K 枚举 | 插件通用 schema 包含 4K，但官方 Seedance 2.5 模型列表不支持 4K | FAIL；上游应拒绝，第一阶段不得使用 |
+| 任务表达式 | 可按 `resolution` 分层，用 `tokens × 元/百万 token ÷ 1,000,000` 结算，完成时 actual tokens 覆盖估算 tokens | PASS |
+
+**结论：** 旧的固定价格/倍率模式 `FAIL`，不得用于本项目的 Seedance 2.5 账单；复用 New API 现有的任务用量表达式是可行路径。第一阶段表达式只覆盖“输入不含视频”的 480p/720p 与 1080p，并以 `usage.completion_tokens` 做终态结算。视频输入价格虽然保留在官方资料表中，但不进入第一阶段配置或测试。
+
+当前 1080p 优惠存在固定截止时刻。不能在仍有运行中任务时直接切换价格；切价 SOP 为：停用渠道 → 等全部任务终态 → 记录切价前余额与日志 → 把 1080p 单价从 `¥55.44` 改为刊例价 `¥77` → 运行脱敏表达式检查 → 重新启用渠道。优惠结束前的表达式验证与切价提醒将在后续配置测试中补充。
+
+**副作用与清理：** 本节只审查源码，没有修改计费代码、配置或数据库，没有创建任务，也没有产生方舟费用。
+
+### 5.3 quota 换算口径
+
+- `QuotaPerUnit=500000`，所以一个 raw quota 点为 `¥0.000002`；
+- 表达式返回单次请求的人民币费用数值，任务 quota 为 `round(人民币费用 × 500000)`；
+- 例如 720p 无视频输入、actual usage 为 108,000 token：`108000 × 70 / 1000000 = ¥7.56`，对应 `3,780,000` quota；
+- 终态对账允许的最大本地量化误差为一个 raw quota 点，即 `¥0.000002`；不得把请求时估算值当成最终账单。
+
+### 5.4 `POC-PRICING-EXPR-001`：Seedance 2.5 第一阶段计费表达式
+
+**状态：** `PASS`
+
+**测试对象：** New API 管理员页面中模型 `doubao-seedance-2-5-260628` 的任务用量表达式。
+
+**是否访问方舟/产生费用：** 否。该测试只保存并校验本地计费配置。
+
+**为什么测试**
+
+证明第一阶段可以完全复用 New API 的任务用量表达式，按官方 actual token 和分辨率计算人民币，而不使用不精确的内置 1080p 倍率。第一阶段只覆盖文生视频与图生视频，不考虑视频输入。
+
+**已保存表达式**
+
+```text
+u("resolution") == "1080p"
+  ? tier("1080p_promo", u("tokens") * 55.44 / 1000000)
+  : tier("480p_720p", u("tokens") * 70 / 1000000)
+```
+
+**如何测试**
+
+1. 在“系统设置 → 计费与支付 → 模型定价”新增精确 Model ID，选择“表达式 → 表达式编辑器”。
+2. 保存上方表达式；保存接口必须通过 Doubao 任务插件的 usage schema 与有限非负向量检查。
+3. 在 PostgreSQL `options` 表核对 `billing_setting.billing_mode` 为该模型选择 `tiered_expr`，`billing_setting.billing_expr` 保存的表达式与文档逐字符一致。
+4. 用下表脱敏向量计算表达式人民币结果和 quota；不创建真实任务。
+5. 在管理员模型定价列表搜索该模型，确认模式显示为表达式计费。
+
+**预期与实际结果**
+
+| 向量 | 预期档位 | 预期人民币 | 预期 quota | 实际结果 |
+| --- | --- | --- | --- | --- |
+| 480p、48,038 token | `480p_720p` | `¥3.36266` | `1,681,330` | PASS |
+| 720p、108,000 token | `480p_720p` | `¥7.56` | `3,780,000` | PASS |
+| 1080p、243,000 token | `1080p_promo` | `¥13.47192` | `6,735,960` | PASS |
+| 720p、0 token | `480p_720p` | `¥0` | `0` | PASS |
+
+**实际执行与证据**
+
+1. 管理员页面保存返回“设置更新成功”；后端按精确 Model ID 找到 Doubao 任务插件，并通过 `tokens`、`resolution` usage schema 的有限非负向量校验。
+2. PostgreSQL `options` 表实际保存：该模型 `billing_mode=tiered_expr`，`billing_expr` 与本节表达式一致。
+3. 页面刷新后搜索该模型，列表显示“表达式”“阶梯计费 · 2 档”。
+4. Windows 主机首次执行 `go test` 时因未安装 Go 命令而未运行，这一步是环境阻塞，不计为表达式失败。随后复用已存在的 `golang:1.26.1-alpine` Docker 镜像执行同一测试夹具，四个子测试全部 PASS。
+5. 为确认结果可复现，又执行一次全新容器复跑。默认 `proxy.golang.org` 下载 `github.com/klauspost/compress` 时发生 `unexpected EOF`，测试尚未编译，属于依赖下载失败；改用临时 `GOPROXY=https://goproxy.cn,direct` 后再次复跑，四个子测试全部 PASS，包耗时 `0.032s`。代理设置只作用于该临时容器，没有写入仓库或运行服务。
+
+```text
+=== RUN   TestSeedance25POCPricingVectors/480p
+=== RUN   TestSeedance25POCPricingVectors/720p
+=== RUN   TestSeedance25POCPricingVectors/1080p_promo
+=== RUN   TestSeedance25POCPricingVectors/zero_tokens
+--- PASS: TestSeedance25POCPricingVectors
+PASS
+ok github.com/QuantumNous/new-api/pkg/billingexpr
+```
+
+测试命令：
+
+```powershell
+docker run --rm -v 'D:\new-api:/src' -w /src golang:1.26.1-alpine `
+  go test ./pkg/billingexpr -run '^TestSeedance25POCPricingVectors$' -count=1 -v
+```
+
+若默认 Go 模块代理下载失败，可执行等价的临时代理复跑：
+
+```powershell
+docker run --rm -e GOPROXY=https://goproxy.cn,direct `
+  -v 'D:\new-api:/src' -w /src golang:1.26.1-alpine `
+  go test ./pkg/billingexpr -run '^TestSeedance25POCPricingVectors$' -count=1 -v
+```
+
+测试夹具保留在 `pkg/billingexpr/seedance_pricing_poc_test.go`，不进入运行镜像、不访问方舟，可直接用上方命令复核。1080p 优惠结束切换到刊例价时，必须同时更新运行配置、该测试中的单价/期望值和本节证据。
+
+数据库复核命令（只读取非秘密计费配置）：
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T postgres `
+  psql -U new_api -d new_api -F '|' -Atc "select key,value from options where key in ('billing_setting.billing_mode','billing_setting.billing_expr') order by key;"
+```
+
+**前端限制：** 原始表达式保存正确，但当前“编辑模型定价”弹窗重新载入包含 `u(...)` 的任务表达式时，文本框错误显示为 `p * 0 + c * 0`，前端预览同时不识别 `u`。模型列表与数据库仍是正确配置。管理员不得在该编辑弹窗直接再次保存，否则可能覆盖正确表达式；后续改价必须使用能够保留原始 JSON 的配置路径，并在保存后执行上述数据库查询和四组向量测试。
+
+**结果哪里看**
+
+- 管理员页面：`http://localhost:3000/system-settings/billing/model-pricing`，搜索完整 Model ID；
+- 权威持久化：PostgreSQL `options` 表的两个 `billing_setting.*` 项；
+- 计算结果：本节测试输出摘要；
+- 未来真实用量：管理员任务日志和用量日志，必须再与 Ark 返回的 `usage.completion_tokens` 对账。
+
+**副作用与清理：** 新增一条 Seedance 2.5 本地计费配置和一条不进入运行镜像的本地回归测试；没有创建渠道、Key 或任务，没有访问方舟、没有产生费用。
+
+**结论：** 后端保存校验、数据库持久化、页面列表模式和四组确定性计算全部一致，`POC-PRICING-EXPR-001` 为 `PASS`。前端编辑弹窗缺陷不影响当前运行时读取，但构成明确的运维限制，必须按上述方式规避。
 
 ## 6. 能力矩阵
 
