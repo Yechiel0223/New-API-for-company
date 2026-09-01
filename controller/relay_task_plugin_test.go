@@ -165,12 +165,48 @@ func TestExecuteTaskSubmissionSettlementFailureStaysDurableAndWritesNothing(t *t
 	assert.Nil(t, outcome)
 	require.NotNil(t, taskErr)
 	assert.Equal(t, "task_billing_settlement_failed", taskErr.Code)
-	assert.Equal(t, []string{"reserve", "insert", "settle"}, events)
+	assert.Equal(t, []string{"reserve", "insert", "insert", "settle"}, events)
 	assert.Zero(t, billing.refunds)
 	var count int64
 	require.NoError(t, database.Model(&model.Task{}).Where("task_id = ?", "task_public").Count(&count).Error)
 	assert.Equal(t, int64(1), count)
+	var usage model.ModelUsageEvent
+	require.NoError(t, database.Where("event_key = ?", "task:task_public").First(&usage).Error)
+	assert.Equal(t, model.ModelUsageStatusRunning, usage.Status)
 	assert.False(t, c.Writer.Written())
+}
+
+func TestExecuteTaskSubmissionFinalizesImmediateTerminalUsageAfterSettlement(t *testing.T) {
+	events := make([]string, 0, 4)
+	database := setupTaskSubmissionDatabase(t, true, &events)
+	previousLogConsumeEnabled := common.LogConsumeEnabled
+	common.LogConsumeEnabled = false
+	t.Cleanup(func() { common.LogConsumeEnabled = previousLogConsumeEnabled })
+	billing := &taskSubmissionTestBilling{events: &events}
+	c := taskSubmissionTestContext()
+	info := taskSubmissionRelayInfo(billing)
+
+	outcome, taskErr := executeTaskSubmissionWith(c, info, func(*gin.Context, *relaycommon.RelayInfo) (*relay.TaskSubmitResult, *dto.TaskError) {
+		return &relay.TaskSubmitResult{
+			UpstreamTaskID: "upstream_private",
+			Platform:       constant.TaskPlatform("plugin"),
+			Quota:          900,
+			Immediate: &relaycommon.TaskInfo{
+				Status: model.TaskStatusSuccess, TotalTokens: 87_300, Url: "https://example.com/video.mp4",
+			},
+		}, nil
+	})
+
+	require.Nil(t, taskErr)
+	require.NotNil(t, outcome)
+	assert.Equal(t, []string{"reserve", "insert", "insert", "settle"}, events)
+	var usage model.ModelUsageEvent
+	require.NoError(t, database.Where("event_key = ?", "task:task_public").First(&usage).Error)
+	assert.Equal(t, model.ModelUsageStatusSuccess, usage.Status)
+	assert.Equal(t, int64(87_300), usage.TotalTokens)
+	assert.Equal(t, 900, usage.FinalQuota)
+	assert.Equal(t, 1, usage.OutputCount)
+	assert.Equal(t, "video", usage.OutputUnit)
 }
 
 func TestExecuteTaskSubmissionPersistsPinnedPluginProvenance(t *testing.T) {
@@ -343,7 +379,7 @@ func TestExecuteTaskSubmissionDisconnectAfterDurableInsertDoesNotRefund(t *testi
 	require.Nil(t, taskErr)
 	require.NotNil(t, outcome)
 	assert.Equal(t, "task_public", outcome.Task.TaskID)
-	assert.Equal(t, []string{"reserve", "insert", "settle"}, events)
+	assert.Equal(t, []string{"reserve", "insert", "insert", "settle"}, events)
 	assert.Zero(t, billing.refunds)
 	var count int64
 	require.NoError(t, database.Model(&model.Task{}).Where("task_id = ?", "task_public").Count(&count).Error)
@@ -360,7 +396,7 @@ func setupTaskSubmissionDatabase(t *testing.T, migrate bool, events *[]string) *
 		*events = append(*events, "insert")
 	}))
 	if migrate {
-		require.NoError(t, database.AutoMigrate(&model.Task{}))
+		require.NoError(t, database.AutoMigrate(&model.Task{}, &model.ModelUsageEvent{}))
 	}
 	model.DB = database
 	t.Cleanup(func() { model.DB = previousDB })

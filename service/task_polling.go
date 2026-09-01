@@ -101,6 +101,7 @@ func sweepTimedOutTasks(ctx context.Context) {
 		if !isLegacy && task.Quota != 0 {
 			RefundTaskQuota(ctx, task, reason)
 		}
+		FinalizeTaskUsage(ctx, task, nil)
 	}
 
 	if timedOutCount > 0 {
@@ -315,6 +316,11 @@ func updateBatchTasks(ctx context.Context, adaptor BatchTaskPollingAdaptor, chan
 			task.PrivateData.ResultURL = responseItem.TaskInfo.Url
 		}
 
+		changed := !snap.Equal(task.Snapshot())
+		if !changed {
+			logger.LogDebug(ctx, "No update needed for batch task %s", task.TaskID)
+			continue
+		}
 		isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
 		terminalTransition := isDone && snap.Status != task.Status
 		won, updateErr := task.UpdateWithStatus(snap.Status)
@@ -326,11 +332,13 @@ func updateBatchTasks(ctx context.Context, adaptor BatchTaskPollingAdaptor, chan
 			logger.LogWarn(ctx, fmt.Sprintf("Batch task %s already transitioned by another process, skip billing", task.TaskID))
 			continue
 		}
+		TouchTaskUsageProgress(task, task.Status, time.Now().Unix())
 		if terminalTransition {
 			billingSettled := settleTaskBillingOnComplete(ctx, adaptor, task, &responseItem.TaskInfo)
 			if task.Status == model.TaskStatusFailure && !billingSettled && task.Quota != 0 {
 				RefundTaskQuota(ctx, task, task.FailReason)
 			}
+			FinalizeTaskUsage(ctx, task, &responseItem.TaskInfo)
 		}
 	}
 	return nil
@@ -554,6 +562,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskResult.Progress
 	}
 
+	changed := !snap.Equal(task.Snapshot())
 	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
 	if isDone && snap.Status != task.Status {
 		won, err := task.UpdateWithStatus(snap.Status)
@@ -563,14 +572,21 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		} else if !won {
 			logger.LogWarn(ctx, fmt.Sprintf("Task %s CAS lost or no-op update, skip billing", task.TaskID))
 			shouldFinalizeBilling = false
+		} else {
+			TouchTaskUsageProgress(task, task.Status, now)
 		}
-	} else if !snap.Equal(task.Snapshot()) {
-		if _, err := task.UpdateWithStatus(snap.Status); err != nil {
+	} else if changed {
+		won, err := task.UpdateWithStatus(snap.Status)
+		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("Failed to update task %s: %s", task.TaskID, err.Error()))
+		} else if won {
+			TouchTaskUsageProgress(task, task.Status, now)
 		}
+		shouldFinalizeBilling = false
 	} else {
 		// No changes, skip update
 		logger.LogDebug(ctx, "No update needed for task %s", task.TaskID)
+		shouldFinalizeBilling = false
 	}
 
 	if shouldFinalizeBilling {
@@ -578,6 +594,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if task.Status == model.TaskStatusFailure && !billingSettled && task.Quota != 0 {
 			RefundTaskQuota(ctx, task, task.FailReason)
 		}
+		FinalizeTaskUsage(ctx, task, taskResult)
 	}
 
 	return nil

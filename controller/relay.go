@@ -757,6 +757,7 @@ func executeTaskSubmissionWith(
 		return nil, taskErr
 	}
 	durable = true
+	service.RecordTaskUsageSubmitted(c, relayInfo, task)
 	stage = "settle"
 	diagnostics.durable(task)
 	diagnostics.settleStart(task, result.Quota)
@@ -768,6 +769,10 @@ func executeTaskSubmissionWith(
 		return nil, taskErr
 	}
 	service.LogTaskConsumption(c, relayInfo, task)
+	if immediate := result.Immediate; immediate != nil &&
+		(immediate.Status == model.TaskStatusSuccess || immediate.Status == model.TaskStatusFailure) {
+		service.FinalizeTaskUsage(c.Request.Context(), task, immediate)
+	}
 	diagnostics.complete(task, result.Quota)
 
 	return &taskSubmissionOutcome{Result: result, Task: task, RelayInfo: relayInfo}, nil
