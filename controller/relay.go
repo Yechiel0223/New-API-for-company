@@ -196,7 +196,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
-	analyticsStarted := false
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
@@ -224,10 +223,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
-		if !analyticsStarted {
-			service.RecordSyncModelUsageStarted(c, relayInfo)
-			analyticsStarted = true
-		}
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -260,7 +255,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		logger.LogInfo(c, retryLogStr)
 	}
 	if newAPIError != nil {
-		if analyticsStarted {
+		if relayInfo.SyncModelUsageStarted {
 			service.RecordSyncModelUsage(c, relayInfo, service.SyncModelUsageResult{
 				Success:       false,
 				FailureReason: newAPIError.MaskSensitiveErrorWithStatusCode(),
