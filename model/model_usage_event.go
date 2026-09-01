@@ -48,6 +48,16 @@ type ModelUsageEvent struct {
 	UpdatedAt      int64            `json:"updated_at"`
 }
 
+type ModelUsageAttempt struct {
+	ID          int64            `json:"id" gorm:"primaryKey"`
+	EventKey    string           `json:"event_key" gorm:"size:191;not null;uniqueIndex:uk_model_usage_attempt_event_channel,priority:1"`
+	ChannelID   int              `json:"channel_id" gorm:"not null;uniqueIndex:uk_model_usage_attempt_event_channel,priority:2;index"`
+	ModelName   string           `json:"model_name" gorm:"size:128;not null;index:idx_model_usage_attempt_model_completed,priority:1"`
+	Status      ModelUsageStatus `json:"status" gorm:"size:16;not null;index"`
+	CompletedAt int64            `json:"completed_at" gorm:"index:idx_model_usage_attempt_model_completed,priority:2;index"`
+	UpdatedAt   int64            `json:"updated_at"`
+}
+
 type ModelUsageFinal struct {
 	Status         ModelUsageStatus
 	CompletedAt    int64
@@ -154,14 +164,59 @@ func ListModelUsageEventsWithContext(ctx context.Context, query ModelUsageQuery)
 	return events, err
 }
 
+func ListModelUsageEventsForAnalytics(ctx context.Context, query ModelUsageQuery) ([]ModelUsageEvent, error) {
+	events := make([]ModelUsageEvent, 0)
+	dbQuery := DB.WithContext(ctx).Model(&ModelUsageEvent{}).
+		Where("(submitted_at >= ? AND submitted_at <= ?) OR (status IN ? AND completed_at >= ? AND completed_at <= ?)",
+			query.StartTimestamp, query.EndTimestamp,
+			[]ModelUsageStatus{ModelUsageStatusSuccess, ModelUsageStatusFailure}, query.StartTimestamp, query.EndTimestamp)
+	if query.Username != "" {
+		dbQuery = dbQuery.Where("username = ?", query.Username)
+	}
+	if query.Models != nil {
+		if len(query.Models) == 0 {
+			return events, nil
+		}
+		dbQuery = dbQuery.Where("model_name IN ?", query.Models)
+	}
+	err := dbQuery.Order("submitted_at ASC").Find(&events).Error
+	return events, err
+}
+
 func ListModelUsageEventsForHealth(ctx context.Context, startTimestamp int64, endTimestamp int64) ([]ModelUsageEvent, error) {
 	events := make([]ModelUsageEvent, 0)
 	err := DB.WithContext(ctx).Model(&ModelUsageEvent{}).
-		Where("submitted_at <= ? AND (submitted_at >= ? OR (completed_at >= ? AND completed_at <= ?) OR status = ?)",
-			endTimestamp, startTimestamp, startTimestamp, endTimestamp, ModelUsageStatusRunning).
+		Where("submitted_at <= ? AND (submitted_at >= ? OR (status IN ? AND completed_at >= ? AND completed_at <= ?) OR status = ?)",
+			endTimestamp, startTimestamp, []ModelUsageStatus{ModelUsageStatusSuccess, ModelUsageStatusFailure},
+			startTimestamp, endTimestamp, ModelUsageStatusRunning).
 		Order("submitted_at ASC").
 		Find(&events).Error
 	return events, err
+}
+
+func UpsertModelUsageAttempt(attempt *ModelUsageAttempt) error {
+	if attempt == nil || attempt.EventKey == "" || attempt.ModelName == "" || attempt.ChannelID <= 0 || attempt.CompletedAt <= 0 {
+		return fmt.Errorf("complete model usage attempt identity is required")
+	}
+	if attempt.Status != ModelUsageStatusSuccess && attempt.Status != ModelUsageStatusFailure {
+		return fmt.Errorf("model usage attempt status must be terminal")
+	}
+	attempt.UpdatedAt = common.GetTimestamp()
+	return DB.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "event_key"}, {Name: "channel_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"model_name", "status", "completed_at", "updated_at",
+		}),
+	}).Create(attempt).Error
+}
+
+func ListModelUsageAttemptsForHealth(ctx context.Context, startTimestamp int64, endTimestamp int64) ([]ModelUsageAttempt, error) {
+	attempts := make([]ModelUsageAttempt, 0)
+	err := DB.WithContext(ctx).
+		Where("completed_at >= ? AND completed_at <= ?", startTimestamp, endTimestamp).
+		Order("completed_at ASC").
+		Find(&attempts).Error
+	return attempts, err
 }
 
 func ListEnabledAbilitiesForModelUsage(ctx context.Context) ([]Ability, error) {

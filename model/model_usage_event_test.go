@@ -17,7 +17,7 @@ func setupModelUsageEventTestDB(t *testing.T) {
 	var err error
 	DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, DB.AutoMigrate(&ModelUsageEvent{}))
+	require.NoError(t, DB.AutoMigrate(&ModelUsageEvent{}, &ModelUsageAttempt{}))
 }
 
 func TestModelUsageEventCreateAndFinalizeIsIdempotent(t *testing.T) {
@@ -125,4 +125,52 @@ func TestListModelUsageEventsForHealthIncludesRecentActivityAndRunningCalls(t *t
 		rows[1].EventKey,
 		rows[2].EventKey,
 	})
+}
+
+func TestListModelUsageEventsForAnalyticsIncludesSubmittedOrCompletedRange(t *testing.T) {
+	setupModelUsageEventTestDB(t)
+	events := []*ModelUsageEvent{
+		{EventKey: "request:submitted", Kind: ModelUsageKindSync, ModelName: "model-a", Username: "alice", Status: ModelUsageStatusSuccess, SubmittedAt: 950, CompletedAt: 960},
+		{EventKey: "task:completed", Kind: ModelUsageKindTask, ModelName: "model-b", Username: "alice", Status: ModelUsageStatusSuccess, SubmittedAt: 100, CompletedAt: 975},
+		{EventKey: "request:old", Kind: ModelUsageKindSync, ModelName: "model-c", Username: "alice", Status: ModelUsageStatusFailure, SubmittedAt: 100, CompletedAt: 200},
+		{EventKey: "request:bob", Kind: ModelUsageKindSync, ModelName: "model-a", Username: "bob", Status: ModelUsageStatusSuccess, SubmittedAt: 960, CompletedAt: 970},
+	}
+	for _, event := range events {
+		require.NoError(t, CreateModelUsageEvent(event))
+	}
+
+	rows, err := ListModelUsageEventsForAnalytics(context.Background(), ModelUsageQuery{
+		StartTimestamp: 900, EndTimestamp: 1_000, Username: "alice",
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	assert.ElementsMatch(t, []string{"request:submitted", "task:completed"}, []string{rows[0].EventKey, rows[1].EventKey})
+}
+
+func TestModelUsageAttemptUpsertKeepsOneResultPerEventAndChannel(t *testing.T) {
+	setupModelUsageEventTestDB(t)
+	require.NoError(t, UpsertModelUsageAttempt(&ModelUsageAttempt{
+		EventKey: "request:a", ModelName: "model-a", ChannelID: 1,
+		Status: ModelUsageStatusFailure, CompletedAt: 950,
+	}))
+	require.NoError(t, UpsertModelUsageAttempt(&ModelUsageAttempt{
+		EventKey: "request:a", ModelName: "model-a", ChannelID: 1,
+		Status: ModelUsageStatusSuccess, CompletedAt: 975,
+	}))
+	require.NoError(t, UpsertModelUsageAttempt(&ModelUsageAttempt{
+		EventKey: "request:a", ModelName: "model-a", ChannelID: 2,
+		Status: ModelUsageStatusFailure, CompletedAt: 980,
+	}))
+
+	rows, err := ListModelUsageAttemptsForHealth(context.Background(), 900, 1_000)
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	byChannel := map[int]ModelUsageAttempt{rows[0].ChannelID: rows[0], rows[1].ChannelID: rows[1]}
+	assert.Equal(t, ModelUsageStatusSuccess, byChannel[1].Status)
+	assert.Equal(t, int64(975), byChannel[1].CompletedAt)
+	assert.Equal(t, ModelUsageStatusFailure, byChannel[2].Status)
+	require.NoError(t, DB.AutoMigrate(&ModelUsageAttempt{}))
+	var count int64
+	require.NoError(t, DB.Model(&ModelUsageAttempt{}).Count(&count).Error)
+	assert.Equal(t, int64(2), count)
 }

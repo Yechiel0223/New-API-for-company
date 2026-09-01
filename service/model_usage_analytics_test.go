@@ -200,11 +200,27 @@ func TestBuildModelHealthUsesWeightedSuccessAndSuccessfulLatency(t *testing.T) {
 	assert.Equal(t, events[3].CompletedAt, seedream.LatestFailureAt)
 }
 
+func TestBuildModelHealthIncludesOldSubmissionCompletedInCurrentWindow(t *testing.T) {
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	event := healthEvent("task:recent-completion", "seedance", now.Add(-2*time.Hour).Unix(), model.ModelUsageStatusSuccess, 7_080_000)
+
+	result := BuildModelHealth([]model.ModelUsageEvent{event}, HealthOptions{Now: now, WindowHours: 1})
+
+	assert.Equal(t, ModelHealthHealthy, result.Overall.Status)
+	assert.Equal(t, int64(1), result.Overall.TotalCalls)
+	assert.Equal(t, int64(1), result.Overall.SuccessCalls)
+	row := requireHealthModel(t, result, "seedance")
+	assert.Equal(t, int64(1), row.TotalCalls)
+	require.NotNil(t, row.P50Ms)
+	assert.Equal(t, event.DurationMs, *row.P50Ms)
+}
+
 func TestBuildModelHealthAppliesCurrentStateFaultAndSampleRules(t *testing.T) {
 	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name       string
 		events     []model.ModelUsageEvent
+		attempts   []model.ModelUsageAttempt
 		abilities  []model.Ability
 		wantStatus ModelHealthStatus
 		wantStuck  int64
@@ -245,15 +261,33 @@ func TestBuildModelHealthAppliesCurrentStateFaultAndSampleRules(t *testing.T) {
 		{
 			name: "all enabled channels latest attempts failed",
 			events: []model.ModelUsageEvent{
-				{EventKey: "request:a-success", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusSuccess, SubmittedAt: now.Add(-12 * time.Minute).Unix(), CompletedAt: now.Add(-11 * time.Minute).Unix()},
-				{EventKey: "request:a-failure", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-10 * time.Minute).Unix(), CompletedAt: now.Add(-9 * time.Minute).Unix()},
-				{EventKey: "request:b-failure", ModelName: "model-a", ChannelID: 2, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-8 * time.Minute).Unix(), CompletedAt: now.Add(-7 * time.Minute).Unix()},
+				{EventKey: "request:canonical", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-10 * time.Minute).Unix(), CompletedAt: now.Add(-7 * time.Minute).Unix()},
+			},
+			attempts: []model.ModelUsageAttempt{
+				{EventKey: "request:canonical", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, CompletedAt: now.Add(-9 * time.Minute).Unix()},
+				{EventKey: "request:canonical", ModelName: "model-a", ChannelID: 2, Status: model.ModelUsageStatusFailure, CompletedAt: now.Add(-7 * time.Minute).Unix()},
 			},
 			abilities: []model.Ability{
 				{Model: "model-a", ChannelId: 1, Enabled: true},
 				{Model: "model-a", ChannelId: 2, Enabled: true},
 			},
 			wantStatus: ModelHealthFault,
+		},
+		{
+			name: "later channel success clears all-channel fault",
+			events: []model.ModelUsageEvent{
+				{EventKey: "request:canonical", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-10 * time.Minute).Unix(), CompletedAt: now.Add(-7 * time.Minute).Unix()},
+			},
+			attempts: []model.ModelUsageAttempt{
+				{EventKey: "request:older", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, CompletedAt: now.Add(-9 * time.Minute).Unix()},
+				{EventKey: "request:older", ModelName: "model-a", ChannelID: 2, Status: model.ModelUsageStatusFailure, CompletedAt: now.Add(-8 * time.Minute).Unix()},
+				{EventKey: "request:newer", ModelName: "model-a", ChannelID: 2, Status: model.ModelUsageStatusSuccess, CompletedAt: now.Add(-6 * time.Minute).Unix()},
+			},
+			abilities: []model.Ability{
+				{Model: "model-a", ChannelId: 1, Enabled: true},
+				{Model: "model-a", ChannelId: 2, Enabled: true},
+			},
+			wantStatus: ModelHealthWarning,
 		},
 		{
 			name: "P95 needs three successful duration samples",
@@ -274,7 +308,7 @@ func TestBuildModelHealthAppliesCurrentStateFaultAndSampleRules(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			result := BuildModelHealth(testCase.events, HealthOptions{
-				Now: now, WindowHours: 24, Abilities: testCase.abilities,
+				Now: now, WindowHours: 24, Abilities: testCase.abilities, Attempts: testCase.attempts,
 			})
 			assert.Equal(t, testCase.wantStatus, result.Overall.Status)
 			assert.Equal(t, testCase.wantStuck, result.Overall.StuckCalls)
@@ -283,6 +317,23 @@ func TestBuildModelHealthAppliesCurrentStateFaultAndSampleRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildModelHealthCurrentStatusDoesNotChangeWithDetailWindow(t *testing.T) {
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	events := []model.ModelUsageEvent{
+		{EventKey: "request:current", ModelName: "active", ChannelID: 1, Status: model.ModelUsageStatusSuccess, SubmittedAt: now.Add(-5 * time.Minute).Unix(), CompletedAt: now.Add(-4 * time.Minute).Unix(), DurationMs: 60_000},
+		{EventKey: "request:historical", ModelName: "retired", ChannelID: 2, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-2 * time.Hour).Unix(), CompletedAt: now.Add(-119 * time.Minute).Unix(), DurationMs: 60_000},
+	}
+	abilities := []model.Ability{{Model: "active", ChannelId: 1, Enabled: true}}
+
+	oneHour := BuildModelHealth(events, HealthOptions{Now: now, WindowHours: 1, Abilities: abilities})
+	twentyFourHours := BuildModelHealth(events, HealthOptions{Now: now, WindowHours: 24, Abilities: abilities})
+
+	assert.Equal(t, ModelHealthHealthy, oneHour.Overall.Status)
+	assert.Equal(t, oneHour.Overall.Status, twentyFourHours.Overall.Status)
+	assert.Equal(t, int64(1), oneHour.Overall.TotalCalls)
+	assert.Equal(t, int64(2), twentyFourHours.Overall.TotalCalls)
 }
 
 func TestCurrentLoadUsesSubmitAndCompletionWindows(t *testing.T) {
@@ -333,4 +384,49 @@ func TestQueryModelAnalyticsAndHealthUseFactTableFilters(t *testing.T) {
 	assert.Equal(t, ModelHealthWarning, health.Overall.Status)
 	_, err = QueryModelHealth(context.Background(), 2, now)
 	require.Error(t, err)
+}
+
+func TestQueryModelHealthIncludesOldSubmissionCompletedInWindow(t *testing.T) {
+	setupUsageRecorderDB(t)
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, model.DB.AutoMigrate(&model.Ability{}))
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "default", Model: "seedance", ChannelId: 1, Enabled: true}).Error)
+	require.NoError(t, model.CreateModelUsageEvent(&model.ModelUsageEvent{
+		EventKey: "task:recent-completion", Kind: model.ModelUsageKindTask,
+		ModelName: "seedance", ChannelID: 1, Status: model.ModelUsageStatusSuccess,
+		SubmittedAt: now.Add(-2 * time.Hour).Unix(), CompletedAt: now.Add(-5 * time.Minute).Unix(),
+		DurationMs: int64((115 * time.Minute) / time.Millisecond), Source: "live",
+	}))
+
+	result, err := QueryModelHealth(context.Background(), 1, now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), result.Overall.TotalCalls)
+	assert.Equal(t, ModelHealthHealthy, result.Overall.Status)
+	assert.Equal(t, int64(1), requireHealthModel(t, result, "seedance").SuccessCalls)
+}
+
+func TestQueryModelAnalyticsPeakTPMIncludesOldSubmissionCompletedInRange(t *testing.T) {
+	setupUsageRecorderDB(t)
+	location := mustShanghai(t)
+	end := time.Date(2026, 9, 2, 12, 0, 0, 0, location)
+	start := end.Add(-10 * time.Minute)
+	require.NoError(t, model.CreateModelUsageEvent(&model.ModelUsageEvent{
+		EventKey: "task:recent-tokens", Kind: model.ModelUsageKindTask,
+		ModelName: "seedance", Status: model.ModelUsageStatusSuccess,
+		SubmittedAt: end.Add(-time.Hour).Unix(), CompletedAt: end.Add(-2 * time.Minute).Unix(),
+		TotalTokens: 300, DurationMs: int64((58 * time.Minute) / time.Millisecond), Source: "live",
+	}))
+
+	result, err := QueryModelAnalytics(context.Background(), ModelAnalyticsQuery{
+		StartTimestamp: start.Unix(), EndTimestamp: end.Unix(), Granularity: AnalyticsGranularityHour,
+	})
+	require.NoError(t, err)
+	assert.Zero(t, result.Summary.TotalCalls)
+	assert.Zero(t, result.Summary.TotalTokens)
+	for _, bucket := range result.Series {
+		assert.Zero(t, bucket.TotalCalls)
+		assert.Zero(t, bucket.Tokens)
+	}
+	assert.Equal(t, 300.0, result.Summary.PeakTPM)
+	assert.Equal(t, end.Add(-2*time.Minute).Truncate(time.Minute).Unix(), result.Summary.PeakTPMAt)
 }

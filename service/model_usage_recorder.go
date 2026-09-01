@@ -157,6 +157,23 @@ func RecordSyncModelUsageStarted(c *gin.Context, info *relaycommon.RelayInfo) {
 	}
 }
 
+func RecordSyncModelUsageAttempt(c *gin.Context, info *relaycommon.RelayInfo, channelID int, success bool) {
+	if c == nil || info == nil || channelID <= 0 {
+		return
+	}
+	event := syncModelUsageEvent(c, info)
+	status := model.ModelUsageStatusFailure
+	if success {
+		status = model.ModelUsageStatusSuccess
+	}
+	if err := model.UpsertModelUsageAttempt(&model.ModelUsageAttempt{
+		EventKey: event.EventKey, ModelName: event.ModelName, ChannelID: channelID,
+		Status: status, CompletedAt: common.GetTimestamp(),
+	}); err != nil {
+		logger.LogError(c, fmt.Sprintf("failed to record model usage attempt, request_id=%s, channel_id=%d: %s", event.RequestID, channelID, err.Error()))
+	}
+}
+
 func RecordSyncModelUsage(c *gin.Context, info *relaycommon.RelayInfo, result SyncModelUsageResult) {
 	if c == nil || info == nil {
 		return

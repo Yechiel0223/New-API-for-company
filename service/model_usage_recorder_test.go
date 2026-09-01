@@ -34,6 +34,7 @@ func setupUsageRecorderDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(
 		&model.ModelUsageEvent{},
+		&model.ModelUsageAttempt{},
 		&model.Task{},
 		&model.User{},
 		&model.Token{},
@@ -323,6 +324,27 @@ func TestRecordSyncModelUsageFinalRetryFailureKeepsOneMaskedFact(t *testing.T) {
 	assert.Equal(t, 512, utf8.RuneCountInString(rows[0].FailureReason))
 	assert.Equal(t, strings.Repeat("错", 511)+"终", rows[0].FailureReason)
 	assert.GreaterOrEqual(t, rows[0].DurationMs, int64(1_500))
+}
+
+func TestRecordSyncModelUsageAttemptPersistsRetryChannelsWithoutDuplicatingFact(t *testing.T) {
+	setupUsageRecorderDB(t)
+	c, info := usageRecorderContext("req-sync-attempts")
+	RecordSyncModelUsageStarted(c, info)
+
+	RecordSyncModelUsageAttempt(c, info, 23, false)
+	RecordSyncModelUsageAttempt(c, info, 24, false)
+	RecordSyncModelUsageAttempt(c, info, 24, true)
+
+	var facts []model.ModelUsageEvent
+	require.NoError(t, model.DB.Find(&facts).Error)
+	require.Len(t, facts, 1)
+	var attempts []model.ModelUsageAttempt
+	require.NoError(t, model.DB.Order("channel_id ASC").Find(&attempts).Error)
+	require.Len(t, attempts, 2)
+	assert.Equal(t, 23, attempts[0].ChannelID)
+	assert.Equal(t, model.ModelUsageStatusFailure, attempts[0].Status)
+	assert.Equal(t, 24, attempts[1].ChannelID)
+	assert.Equal(t, model.ModelUsageStatusSuccess, attempts[1].Status)
 }
 
 func TestRecordSyncModelUsageAfterGeneralQuotaSettlement(t *testing.T) {

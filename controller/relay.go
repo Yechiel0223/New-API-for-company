@@ -233,6 +233,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		default:
 			newAPIError = relayHandler(c, relayInfo)
 		}
+		if relayInfo.SyncModelUsageStarted {
+			service.RecordSyncModelUsageAttempt(c, relayInfo, channel.Id, newAPIError == nil)
+		}
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil

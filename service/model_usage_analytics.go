@@ -141,6 +141,7 @@ type HealthOptions struct {
 	Now         time.Time
 	WindowHours int
 	Abilities   []model.Ability
+	Attempts    []model.ModelUsageAttempt
 }
 
 func QueryModelAnalytics(ctx context.Context, query ModelAnalyticsQuery) (ModelAnalyticsResult, error) {
@@ -155,7 +156,7 @@ func QueryModelAnalytics(ctx context.Context, query ModelAnalyticsQuery) (ModelA
 	if err != nil {
 		return ModelAnalyticsResult{}, err
 	}
-	events, err := model.ListModelUsageEventsWithContext(ctx, model.ModelUsageQuery{
+	events, err := model.ListModelUsageEventsForAnalytics(ctx, model.ModelUsageQuery{
 		StartTimestamp: query.StartTimestamp,
 		EndTimestamp:   query.EndTimestamp,
 		Username:       query.Username,
@@ -208,7 +209,11 @@ func QueryModelHealth(ctx context.Context, hours int, now time.Time) (ModelHealt
 	if err != nil {
 		return ModelHealthResult{}, err
 	}
-	return BuildModelHealth(events, HealthOptions{Now: now, WindowHours: hours, Abilities: abilities}), nil
+	attempts, err := model.ListModelUsageAttemptsForHealth(ctx, start, now.Unix())
+	if err != nil {
+		return ModelHealthResult{}, err
+	}
+	return BuildModelHealth(events, HealthOptions{Now: now, WindowHours: hours, Abilities: abilities, Attempts: attempts}), nil
 }
 
 func AggregateModelUsage(events []model.ModelUsageEvent, options AnalyticsOptions) ModelAnalyticsResult {
@@ -302,6 +307,8 @@ func AggregateModelUsage(events []model.ModelUsageEvent, options AnalyticsOption
 
 		submitMinute := analyticsMinuteStart(event.SubmittedAt, location)
 		minuteCalls[submitMinute]++
+	}
+	for _, event := range uniqueEvents {
 		if isTerminalModelUsageStatus(event.Status) && event.CompletedAt >= options.Start && event.CompletedAt <= options.End {
 			completionMinute := analyticsMinuteStart(event.CompletedAt, location)
 			minuteTokens[completionMinute] += event.TotalTokens
@@ -373,11 +380,21 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 		if event.SubmittedAt > nowTimestamp {
 			continue
 		}
-		if event.SubmittedAt >= windowStart || event.Status == model.ModelUsageStatusRunning {
+		if modelUsageEventActiveInWindow(event, windowStart, nowTimestamp) || event.Status == model.ModelUsageStatusRunning {
 			windowEvents = append(windowEvents, event)
 		}
-		if event.SubmittedAt >= currentStart || event.Status == model.ModelUsageStatusRunning {
+		if modelUsageEventActiveInWindow(event, currentStart, nowTimestamp) || event.Status == model.ModelUsageStatusRunning {
 			currentEvents = append(currentEvents, event)
+		}
+	}
+	windowAttempts := make([]model.ModelUsageAttempt, 0, len(options.Attempts))
+	currentAttempts := make([]model.ModelUsageAttempt, 0, len(options.Attempts))
+	for _, attempt := range uniqueModelUsageAttempts(options.Attempts) {
+		if attempt.CompletedAt >= windowStart && attempt.CompletedAt <= nowTimestamp {
+			windowAttempts = append(windowAttempts, attempt)
+		}
+		if attempt.CompletedAt >= currentStart && attempt.CompletedAt <= nowTimestamp {
+			currentAttempts = append(currentAttempts, attempt)
 		}
 	}
 
@@ -404,6 +421,10 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 		}
 	}
 	result.Overall.SuccessRate = terminalSuccessRate(result.Overall.SuccessCalls, result.Overall.FailureCalls)
+	modelAttempts := make(map[string][]model.ModelUsageAttempt)
+	for _, attempt := range windowAttempts {
+		modelAttempts[attempt.ModelName] = append(modelAttempts[attempt.ModelName], attempt)
+	}
 
 	enabledChannels := enabledModelChannels(options.Abilities)
 	availabilityKnown := options.Abilities != nil
@@ -412,7 +433,7 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 		modelNames[modelName] = struct{}{}
 	}
 	for _, modelName := range sortedKeys(modelNames) {
-		row := buildModelHealthRow(modelName, modelEvents[modelName], enabledChannels[modelName], availabilityKnown, stuckBefore)
+		row := buildModelHealthRow(modelName, modelEvents[modelName], modelAttempts[modelName], enabledChannels[modelName], availabilityKnown, stuckBefore)
 		result.Models = append(result.Models, row)
 	}
 
@@ -420,9 +441,13 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 	for _, event := range currentEvents {
 		currentByModel[event.ModelName] = append(currentByModel[event.ModelName], event)
 	}
+	currentAttemptsByModel := make(map[string][]model.ModelUsageAttempt)
+	for _, attempt := range currentAttempts {
+		currentAttemptsByModel[attempt.ModelName] = append(currentAttemptsByModel[attempt.ModelName], attempt)
+	}
 	hasUnavailableModel := false
 	if availabilityKnown {
-		for modelName := range modelEvents {
+		for modelName := range currentByModel {
 			if len(enabledChannels[modelName]) == 0 {
 				hasUnavailableModel = true
 				break
@@ -433,7 +458,7 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 	hasFailureOrStuck := false
 	hasCompleted := false
 	for modelName, modelCurrentEvents := range currentByModel {
-		if modelUsageEventsHaveFault(modelCurrentEvents, enabledChannels[modelName], availabilityKnown) {
+		if modelUsageEventsHaveFault(modelCurrentEvents, currentAttemptsByModel[modelName], enabledChannels[modelName], availabilityKnown) {
 			hasFault = true
 		}
 		for _, event := range modelCurrentEvents {
@@ -458,7 +483,7 @@ func BuildModelHealth(events []model.ModelUsageEvent, options HealthOptions) Mod
 	return result
 }
 
-func buildModelHealthRow(modelName string, events []model.ModelUsageEvent, enabledChannels map[int]struct{}, availabilityKnown bool, stuckBefore int64) ModelHealthRow {
+func buildModelHealthRow(modelName string, events []model.ModelUsageEvent, attempts []model.ModelUsageAttempt, enabledChannels map[int]struct{}, availabilityKnown bool, stuckBefore int64) ModelHealthRow {
 	row := ModelHealthRow{ModelName: modelName}
 	durations := make([]int64, 0, len(events))
 	for _, event := range events {
@@ -499,7 +524,7 @@ func buildModelHealthRow(modelName string, events []model.ModelUsageEvent, enabl
 	}
 
 	switch {
-	case modelUsageEventsHaveFault(events, enabledChannels, availabilityKnown):
+	case modelUsageEventsHaveFault(events, attempts, enabledChannels, availabilityKnown):
 		row.Status = ModelHealthFault
 	case row.FailureCalls > 0 || row.StuckCalls > 0 || row.RunningCalls > 0 && row.SuccessCalls == 0:
 		row.Status = ModelHealthWarning
@@ -511,7 +536,7 @@ func buildModelHealthRow(modelName string, events []model.ModelUsageEvent, enabl
 	return row
 }
 
-func modelUsageEventsHaveFault(events []model.ModelUsageEvent, enabledChannels map[int]struct{}, availabilityKnown bool) bool {
+func modelUsageEventsHaveFault(events []model.ModelUsageEvent, attempts []model.ModelUsageAttempt, enabledChannels map[int]struct{}, availabilityKnown bool) bool {
 	if availabilityKnown && len(enabledChannels) == 0 {
 		return true
 	}
@@ -533,14 +558,14 @@ func modelUsageEventsHaveFault(events []model.ModelUsageEvent, enabledChannels m
 	if !availabilityKnown || len(enabledChannels) == 0 {
 		return false
 	}
-	latestByChannel := make(map[int]model.ModelUsageEvent, len(enabledChannels))
-	for _, event := range terminalEvents {
-		if _, enabled := enabledChannels[event.ChannelID]; !enabled {
+	latestByChannel := make(map[int]model.ModelUsageAttempt, len(enabledChannels))
+	for _, attempt := range attempts {
+		if _, enabled := enabledChannels[attempt.ChannelID]; !enabled {
 			continue
 		}
-		latest, exists := latestByChannel[event.ChannelID]
-		if !exists || modelUsageTerminalTime(event) >= modelUsageTerminalTime(latest) {
-			latestByChannel[event.ChannelID] = event
+		latest, exists := latestByChannel[attempt.ChannelID]
+		if !exists || attempt.CompletedAt >= latest.CompletedAt {
+			latestByChannel[attempt.ChannelID] = attempt
 		}
 	}
 	if len(latestByChannel) != len(enabledChannels) {
@@ -552,6 +577,34 @@ func modelUsageEventsHaveFault(events []model.ModelUsageEvent, enabledChannels m
 		}
 	}
 	return true
+}
+
+func uniqueModelUsageAttempts(attempts []model.ModelUsageAttempt) []model.ModelUsageAttempt {
+	type attemptKey struct {
+		eventKey  string
+		channelID int
+		fallback  int
+	}
+	unique := make(map[attemptKey]model.ModelUsageAttempt, len(attempts))
+	order := make([]attemptKey, 0, len(attempts))
+	for index, attempt := range attempts {
+		key := attemptKey{eventKey: attempt.EventKey, channelID: attempt.ChannelID}
+		if attempt.EventKey == "" || attempt.ChannelID <= 0 {
+			key.fallback = index + 1
+		}
+		previous, exists := unique[key]
+		if !exists {
+			order = append(order, key)
+		}
+		if !exists || attempt.CompletedAt >= previous.CompletedAt {
+			unique[key] = attempt
+		}
+	}
+	result := make([]model.ModelUsageAttempt, 0, len(unique))
+	for _, key := range order {
+		result = append(result, unique[key])
+	}
+	return result
 }
 
 func enabledModelChannels(abilities []model.Ability) map[string]map[int]struct{} {
@@ -680,6 +733,13 @@ func isTerminalModelUsageStatus(status model.ModelUsageStatus) bool {
 
 func modelUsageEventIsStuck(event model.ModelUsageEvent, stuckBefore int64) bool {
 	return event.Status == model.ModelUsageStatusRunning && event.LastProgressAt <= stuckBefore
+}
+
+func modelUsageEventActiveInWindow(event model.ModelUsageEvent, start int64, end int64) bool {
+	if event.SubmittedAt >= start && event.SubmittedAt <= end {
+		return true
+	}
+	return isTerminalModelUsageStatus(event.Status) && event.CompletedAt >= start && event.CompletedAt <= end
 }
 
 func modelUsageTerminalTime(event model.ModelUsageEvent) int64 {
