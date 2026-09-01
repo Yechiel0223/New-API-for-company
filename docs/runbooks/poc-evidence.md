@@ -996,3 +996,20 @@ ok github.com/QuantumNous/new-api/middleware 0.362s
 ### 13.4 当前决策
 
 “每个员工一个普通用户账号 + 一把独立虚拟 Key + 共用一个真实方舟渠道”已通过核心可行性验收，建议作为约 20 人公司内部使用方案。账单与 Token 准确性不再是生产阻塞项；若以后要把用户余额当作绝对不能透支一分钱的严格停机线，仍需单独处理默认比例的预扣边界并复测，这属于额度控制问题，不推翻最终账单准确性结论。
+
+## 14. 同一方舟真实 Key 的多模型能力探测
+
+**测试时间：** 2026-09-01 10:08 至 10:11（Asia/Shanghai）。
+
+**完整记录：** [ark-multi-model-capability-2026-09-01.md](./ark-multi-model-capability-2026-09-01.md)。
+
+鉴权 `GET /api/v3/models` 当前同时返回 `doubao-seedance-2-5-260628`、`doubao-seedance-2-0-260128` 和 `doubao-seedream-5-0-pro-260628`。随后绕过 New API、直接使用同一方舟真实 Key 完成两次确定性生成：
+
+| 模型 | 真实结果 | usage | 结论 |
+| --- | --- | ---: | --- |
+| Seedance 2.0 | 720p/4 秒文生视频成功，视频 URL 存在 | 87,300 tokens | PASS |
+| Seedream 5.0 Pro | 2K 文生图成功，返回 1 张图片 URL | 16,384 output tokens | PASS |
+
+Seedance 2.5 已由此前 15 个同 Key 真实任务证明，且本轮模型列表仍可见，继续记为 PASS。新增两次确定性调用直接访问方舟，故 New API 数据库仍为 15 个任务、71 条日志、渠道累计 `123608712` raw quota；这不是漏账，而是本轮刻意只验证上游 Key 权限。另有一次 Seedream 最小同步请求在客户端等待 30 秒后结果不确定，已单列为 `INDETERMINATE`，不作为通过证据。
+
+当前不能把“上游 Key 能用”误写为“平台已经接好”：New API 渠道、员工 Key 白名单和计费仍只配置 Seedance 2.5。Seedance 2.0 与 Seedream 5.0 Pro 必须先拿到公司方舟控制台的当前精细价格，再完成平台路由、人民币计费和逐模型真实对账。
