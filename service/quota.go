@@ -383,6 +383,19 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
+	outputCount := 0
+	outputUnit := ""
+	if usage.GeneratedImages > 0 {
+		outputCount = usage.GeneratedImages
+		outputUnit = "image"
+	}
+	RecordSyncModelUsage(ctx, relayInfo, SyncModelUsageResult{
+		Success:     true,
+		TotalTokens: int64(usage.TotalTokens),
+		OutputCount: outputCount,
+		OutputUnit:  outputUnit,
+		FinalQuota:  quota,
+	})
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(usage.CompletionTokens))
 	})

@@ -537,6 +537,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
+	RecordSyncModelUsage(ctx, relayInfo, SyncModelUsageResult{
+		Success:     true,
+		TotalTokens: int64(summary.TotalTokens),
+		FinalQuota:  summary.Quota,
+	})
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
 	})
