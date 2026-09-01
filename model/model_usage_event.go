@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
@@ -128,8 +129,12 @@ func TouchModelUsageEvent(eventKey string, status ModelUsageStatus, progressAt i
 }
 
 func ListModelUsageEvents(query ModelUsageQuery) ([]ModelUsageEvent, error) {
+	return ListModelUsageEventsWithContext(context.Background(), query)
+}
+
+func ListModelUsageEventsWithContext(ctx context.Context, query ModelUsageQuery) ([]ModelUsageEvent, error) {
 	events := make([]ModelUsageEvent, 0)
-	dbQuery := DB.Model(&ModelUsageEvent{})
+	dbQuery := DB.WithContext(ctx).Model(&ModelUsageEvent{})
 	if query.StartTimestamp > 0 {
 		dbQuery = dbQuery.Where("submitted_at >= ?", query.StartTimestamp)
 	}
@@ -147,6 +152,22 @@ func ListModelUsageEvents(query ModelUsageQuery) ([]ModelUsageEvent, error) {
 	}
 	err := dbQuery.Order("submitted_at ASC").Find(&events).Error
 	return events, err
+}
+
+func ListModelUsageEventsForHealth(ctx context.Context, startTimestamp int64, endTimestamp int64) ([]ModelUsageEvent, error) {
+	events := make([]ModelUsageEvent, 0)
+	err := DB.WithContext(ctx).Model(&ModelUsageEvent{}).
+		Where("submitted_at <= ? AND (submitted_at >= ? OR (completed_at >= ? AND completed_at <= ?) OR status = ?)",
+			endTimestamp, startTimestamp, startTimestamp, endTimestamp, ModelUsageStatusRunning).
+		Order("submitted_at ASC").
+		Find(&events).Error
+	return events, err
+}
+
+func ListEnabledAbilitiesForModelUsage(ctx context.Context) ([]Ability, error) {
+	abilities := make([]Ability, 0)
+	err := DB.WithContext(ctx).Where("enabled = ?", true).Find(&abilities).Error
+	return abilities, err
 }
 
 func DeleteModelUsageBackfillBatch(batch string) (int64, error) {

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -101,4 +102,27 @@ func TestDeleteModelUsageBackfillBatchRejectsEmptyBatch(t *testing.T) {
 	var count int64
 	require.NoError(t, DB.Model(&ModelUsageEvent{}).Count(&count).Error)
 	assert.Equal(t, int64(1), count)
+}
+
+func TestListModelUsageEventsForHealthIncludesRecentActivityAndRunningCalls(t *testing.T) {
+	setupModelUsageEventTestDB(t)
+	events := []*ModelUsageEvent{
+		{EventKey: "request:submitted", Kind: ModelUsageKindSync, ModelName: "model-a", Status: ModelUsageStatusSuccess, SubmittedAt: 950, CompletedAt: 960},
+		{EventKey: "task:completed", Kind: ModelUsageKindTask, ModelName: "model-b", Status: ModelUsageStatusSuccess, SubmittedAt: 100, CompletedAt: 975},
+		{EventKey: "task:running", Kind: ModelUsageKindTask, ModelName: "model-c", Status: ModelUsageStatusRunning, SubmittedAt: 100, LastProgressAt: 200},
+		{EventKey: "request:old", Kind: ModelUsageKindSync, ModelName: "model-d", Status: ModelUsageStatusFailure, SubmittedAt: 100, CompletedAt: 200},
+		{EventKey: "request:future", Kind: ModelUsageKindSync, ModelName: "model-e", Status: ModelUsageStatusRunning, SubmittedAt: 1_001},
+	}
+	for _, event := range events {
+		require.NoError(t, CreateModelUsageEvent(event))
+	}
+
+	rows, err := ListModelUsageEventsForHealth(context.Background(), 900, 1_000)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+	assert.ElementsMatch(t, []string{"task:running", "request:submitted", "task:completed"}, []string{
+		rows[0].EventKey,
+		rows[1].EventKey,
+		rows[2].EventKey,
+	})
 }
