@@ -75,7 +75,7 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 	previousRedisEnabled := common.RedisEnabled
 	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Channel{}, &model.Task{}, &model.Log{}))
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Channel{}, &model.Task{}, &model.Log{}, &model.Token{}))
 	model.DB = database
 	model.LOG_DB = database
 	common.MemoryCacheEnabled = false
@@ -98,6 +98,13 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 		Username: "native-route-user",
 		Group:    "default",
 		Quota:    1_000_000,
+	}).Error)
+	require.NoError(t, database.Create(&model.Token{
+		Id:             17,
+		UserId:         7,
+		Name:           "native-route-token",
+		Key:            "native-route-token-key",
+		UnlimitedQuota: true,
 	}).Error)
 
 	var submitCalls atomic.Int32
@@ -157,6 +164,7 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 	common.SetContextKey(submitContext, constant.ContextKeyUserGroup, "default")
 	common.SetContextKey(submitContext, constant.ContextKeyUsingGroup, "default")
 	common.SetContextKey(submitContext, constant.ContextKeyTokenGroup, "default")
+	common.SetContextKey(submitContext, constant.ContextKeyTokenId, 17)
 	common.SetContextKey(submitContext, constant.ContextKeyUserQuota, 1_000_000)
 
 	middleware.PrepareTaskPluginRoute()(submitContext)
@@ -167,6 +175,7 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 
 	billing := &nativeRouteBilling{userID: 7}
 	relayInfo := &relaycommon.RelayInfo{
+		TokenId:         17,
 		UserId:          7,
 		UserGroup:       "default",
 		UsingGroup:      "default",
@@ -232,6 +241,7 @@ func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 		Route:      queryBinding.Route,
 	})
 	common.SetContextKey(queryContext, constant.ContextKeyUserId, 7)
+	common.SetContextKey(queryContext, constant.ContextKeyTokenId, 17)
 
 	middleware.PrepareTaskPluginRoute()(queryContext)
 

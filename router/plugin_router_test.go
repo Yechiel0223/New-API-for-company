@@ -738,6 +738,7 @@ func TestProductionPluginNativeQueryTraversesInnerRouter(t *testing.T) {
 		PrivateData: model.TaskPrivateData{
 			UpstreamTaskID: "private_upstream_id",
 			ResultURL:      "https://secret.example/video.mp4",
+			TokenId:        42,
 		},
 	}).Error)
 
@@ -752,6 +753,7 @@ func TestProductionPluginNativeQueryTraversesInnerRouter(t *testing.T) {
 			production[0],
 			func(c *gin.Context) {
 				common.SetContextKey(c, constant.ContextKeyUserId, 91)
+				common.SetContextKey(c, constant.ContextKeyTokenId, 42)
 				common.SetContextKey(c, constant.ContextKeyUserGroup, "default")
 				common.SetContextKey(c, constant.ContextKeyTokenGroup, "default")
 				c.Next()
