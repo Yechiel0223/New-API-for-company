@@ -87,3 +87,18 @@ func TestModelUsageEventTouchListAndDeleteBackfillBatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), deleted)
 }
+
+func TestDeleteModelUsageBackfillBatchRejectsEmptyBatch(t *testing.T) {
+	setupModelUsageEventTestDB(t)
+	require.NoError(t, CreateModelUsageEvent(&ModelUsageEvent{
+		EventKey: "request:native", Kind: ModelUsageKindSync, ModelName: "model",
+		Status: ModelUsageStatusSuccess,
+	}))
+
+	_, err := DeleteModelUsageBackfillBatch("")
+	require.Error(t, err)
+
+	var count int64
+	require.NoError(t, DB.Model(&ModelUsageEvent{}).Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+}

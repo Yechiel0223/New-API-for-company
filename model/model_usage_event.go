@@ -150,6 +150,9 @@ func ListModelUsageEvents(query ModelUsageQuery) ([]ModelUsageEvent, error) {
 }
 
 func DeleteModelUsageBackfillBatch(batch string) (int64, error) {
+	if batch == "" {
+		return 0, fmt.Errorf("model usage backfill batch is required")
+	}
 	result := DB.Where("backfill_batch = ?", batch).Delete(&ModelUsageEvent{})
 	return result.RowsAffected, result.Error
 }
