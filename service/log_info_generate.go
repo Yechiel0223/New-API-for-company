@@ -113,9 +113,27 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendRequestConversionChain(relayInfo, other)
 	appendFinalRequestFormat(relayInfo, other)
 	appendBillingInfo(relayInfo, other)
+	appendSeedreamBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
 	return other
+}
+
+func appendSeedreamBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
+	if relayInfo == nil || relayInfo.SeedreamBilling == nil || other == nil {
+		return
+	}
+	billing := relayInfo.SeedreamBilling
+	other["seedream_billing"] = map[string]interface{}{
+		"mode":              "postpaid",
+		"scene":             billing.Scene,
+		"input_images":      billing.InputImages,
+		"generated_images":  billing.GeneratedImages,
+		"low_pixel_images":  billing.LowPixelImages,
+		"high_pixel_images": billing.HighPixelImages,
+		"fallback_images":   billing.FallbackImages,
+		"total_price_rmb":   billing.TotalPrice,
+	}
 }
 
 func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {

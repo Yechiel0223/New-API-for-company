@@ -145,6 +145,18 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if imageN > 0 {
 		logContent = append(logContent, fmt.Sprintf("生成数量 %d", imageN))
 	}
+	if billing := info.SeedreamBilling; billing != nil {
+		logContent = append(logContent, fmt.Sprintf(
+			"Seedream 后付费：场景 %s，输入图片 %d，输出图片 %d，低像素档 %d，高像素档 %d，兜底 %d，费用 ¥%.2f",
+			billing.Scene,
+			billing.InputImages,
+			billing.GeneratedImages,
+			billing.LowPixelImages,
+			billing.HighPixelImages,
+			billing.FallbackImages,
+			billing.TotalPrice,
+		))
+	}
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
 	return nil

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -174,6 +175,11 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 			return hosttypes.PriceData{}, err
 		}
 		priceData.QuotaToPreConsume = quota
+	}
+	if info.OriginModelName == constant.ModelDoubaoSeedream5Pro &&
+		common.GetContextKeyInt(c, constant.ContextKeyChannelType) == constant.ChannelTypeVolcEngine {
+		priceData.Postpaid = true
+		priceData.QuotaToPreConsume = 0
 	}
 
 	if common.DebugEnabled {

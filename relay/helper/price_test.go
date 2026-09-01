@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -15,6 +16,56 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestModelPriceHelperMarksSeedreamAsPostpaid(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	saved := ratio_setting.ModelPrice2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(saved))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"doubao-seedream-5-0-pro-260628":0.6}`))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("group", "default")
+	common.SetContextKey(ctx, constant.ContextKeyChannelType, constant.ChannelTypeVolcEngine)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: constant.ModelDoubaoSeedream5Pro,
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+
+	priceData, err := ModelPriceHelper(ctx, info, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.True(t, priceData.Postpaid)
+	require.False(t, priceData.ShouldPreConsume())
+	require.Zero(t, priceData.QuotaToPreConsume)
+}
+
+func TestModelPriceHelperDoesNotMarkSeedreamPostpaidOnOtherChannels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	saved := ratio_setting.ModelPrice2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(saved))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"doubao-seedream-5-0-pro-260628":0.6}`))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("group", "default")
+	common.SetContextKey(ctx, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: constant.ModelDoubaoSeedream5Pro,
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+
+	priceData, err := ModelPriceHelper(ctx, info, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.False(t, priceData.Postpaid)
+	require.True(t, priceData.ShouldPreConsume())
+	require.Equal(t, 300000, priceData.QuotaToPreConsume)
+}
 
 func TestModelPriceHelperTieredUsesPreloadedRequestInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)

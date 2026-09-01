@@ -47,6 +47,8 @@ func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, res
 				usage.PromptTokensDetails.CachedTokens = cachedTokens
 			}
 		}
+	case constant.ChannelTypeVolcEngine:
+		applyVolcengineSeedreamBilling(info, usage, responseBody)
 	}
 }
 

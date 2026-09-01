@@ -40,7 +40,62 @@ func TestSeedance25POCPricingVectors(t *testing.T) {
 				ExprString:       expression,
 				ExprHash:         ExprHashString(expression),
 				GroupRatio:       1,
-				QuotaPerUnit:      500_000,
+				QuotaPerUnit:     500_000,
+				ExprVersion:      1,
+				TaskUsageBilling: true,
+			}, TokenParams{}, request)
+			require.NoError(t, err)
+			assert.Equal(t, test.wantQuota, result.ActualQuotaAfterGroup)
+		})
+	}
+}
+
+func TestSeedance20PricingVectors(t *testing.T) {
+	expression := `u("resolution") == "4k"
+  ? (u("video_input") == "video"
+    ? tier("4k_video_input", u("tokens") * 16 / 1000000)
+    : tier("4k_no_video_input", u("tokens") * 26 / 1000000))
+  : u("resolution") == "1080p"
+    ? (u("video_input") == "video"
+      ? tier("1080p_video_input", u("tokens") * 31 / 1000000)
+      : tier("1080p_no_video_input", u("tokens") * 51 / 1000000))
+    : (u("video_input") == "video"
+      ? tier("480p_720p_video_input", u("tokens") * 28 / 1000000)
+      : tier("480p_720p_no_video_input", u("tokens") * 46 / 1000000))`
+	tests := []struct {
+		name       string
+		resolution string
+		videoInput string
+		tokens     float64
+		wantTier   string
+		wantCost   float64
+		wantQuota  int
+	}{
+		{name: "real 720p 4s text to video", resolution: "720p", videoInput: "none", tokens: 87_300, wantTier: "480p_720p_no_video_input", wantCost: 4.0158, wantQuota: 2_007_900},
+		{name: "720p video input", resolution: "720p", videoInput: "video", tokens: 100_000, wantTier: "480p_720p_video_input", wantCost: 2.8, wantQuota: 1_400_000},
+		{name: "1080p no video input", resolution: "1080p", videoInput: "none", tokens: 100_000, wantTier: "1080p_no_video_input", wantCost: 5.1, wantQuota: 2_550_000},
+		{name: "1080p video input", resolution: "1080p", videoInput: "video", tokens: 100_000, wantTier: "1080p_video_input", wantCost: 3.1, wantQuota: 1_550_000},
+		{name: "4k no video input", resolution: "4k", videoInput: "none", tokens: 100_000, wantTier: "4k_no_video_input", wantCost: 2.6, wantQuota: 1_300_000},
+		{name: "4k video input", resolution: "4k", videoInput: "video", tokens: 100_000, wantTier: "4k_video_input", wantCost: 1.6, wantQuota: 800_000},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := RequestInput{Usage: map[string]any{
+				"resolution":  test.resolution,
+				"video_input": test.videoInput,
+				"tokens":      test.tokens,
+			}}
+			cost, trace, err := RunExprWithRequest(expression, TokenParams{}, request)
+			require.NoError(t, err)
+			assert.InDelta(t, test.wantCost, cost, 0.000000001)
+			assert.Equal(t, test.wantTier, trace.MatchedTier)
+
+			result, err := ComputeTieredQuotaWithRequest(&BillingSnapshot{
+				ExprString:       expression,
+				ExprHash:         ExprHashString(expression),
+				GroupRatio:       1,
+				QuotaPerUnit:     500_000,
 				ExprVersion:      1,
 				TaskUsageBilling: true,
 			}, TokenParams{}, request)

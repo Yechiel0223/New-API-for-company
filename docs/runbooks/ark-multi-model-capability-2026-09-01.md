@@ -333,3 +333,15 @@ usage 实际返回：
 - [图片生成 API 正式参考](https://docs.volcengine.com/docs/82379/1541523)
 - [火山方舟模型价格](https://docs.volcengine.com/docs/82379/1544106#457edfd0)
 - [火山方舟产品页](https://www.volcengine.com/product/ark)
+
+## 11. New API 接入进展（2026-09-01 后续实施）
+
+本文第 8、9 节记录的 New API 接入差距已经完成后续实施：渠道和四把现有虚拟 Key 已放行三个精确模型；Seedance 2.0 已配置 actual-token 表达式；`layer_decomposition`、图片数量 usage 字段和 Seedream 统一后付费链路已经补入代码，并通过 Windows 针对性测试、Linux/Go 1.26 相关全包回归以及真实 New API 端到端付费验收。
+
+真实 New API 验收包括：Seedance 2.0 720p/4 秒成功并按 87,300 actual tokens 精确扣 ¥4.015800；Seedream 文生图和图生图各扣 ¥0.60；正式图层拆分返回 4 层并按 3 个低像素档、1 个高像素档扣 ¥0.75；无效尺寸请求返回 400 且钱包不变。四次成功请求的用户、虚拟 Key 和渠道增量均为 ¥5.965800。
+
+完整的实现文件、计费规则、运行配置、测试命令、结果位置和已知边界见：
+
+- [ark-three-models-postpaid-implementation-2026-09-01.md](./ark-three-models-postpaid-implementation-2026-09-01.md)
+
+本节只提供状态索引；原始直连方舟能力证据和当时的测试结果保持不变，不回写成经过 New API 的证据。

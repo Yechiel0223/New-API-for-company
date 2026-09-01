@@ -23,7 +23,7 @@ import (
 )
 
 func updateOpenAIImageCount(info *relaycommon.RelayInfo, count int64) {
-	if info == nil || !info.PriceData.UsePrice || count <= 0 || count > int64(dto.MaxImageN) {
+	if info == nil || info.SeedreamBilling != nil || !info.PriceData.UsePrice || count <= 0 || count > int64(dto.MaxImageN) {
 		return
 	}
 	info.PriceData.AddOtherRatio("n", float64(count))
@@ -112,6 +112,7 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	usage := &dto.Usage{}
 	var lastStreamData []byte
 	var completedImages int64
+	var completedImageSizes []string
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		raw := common.StringToByteSlice(data)
@@ -132,6 +133,11 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 			}
 			if chunk.Type == "image_generation.completed" || chunk.Type == "image_edit.completed" {
 				completedImages++
+				size := gjson.GetBytes(raw, "size").String()
+				if size == "" {
+					size = gjson.GetBytes(raw, "image.size").String()
+				}
+				completedImageSizes = append(completedImageSizes, size)
 			}
 		}
 		if err := writeOpenaiImageStreamChunk(c, raw); err != nil {
@@ -145,7 +151,6 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		helper.Done(c)
 	}
 
-	applyUsagePostProcessing(info, usage, lastStreamData)
 	// Only trust completedImages when upstream finished the stream (done/eof).
 	// On client-side aborts (client_gone, or handler_stop from a failed client
 	// write) the counter undercounts what upstream actually generated and
@@ -153,13 +158,21 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	// image by disconnecting right after the first completed event. The abort
 	// guard only blocks lowering the charge: if completed events already
 	// exceed the recorded n, bill the higher actual count regardless.
+	upstreamFinished := info.StreamStatus != nil &&
+		(info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone ||
+			info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF)
+	requestedN := 1.0
+	if n, ok := info.PriceData.OtherRatios()["n"]; ok {
+		requestedN = n
+	}
+	billingImageCount := completedImages
+	if !upstreamFinished && int64(requestedN) > billingImageCount {
+		billingImageCount = int64(requestedN)
+	}
+	if !applyVolcengineSeedreamStreamBilling(info, usage, completedImageSizes, int(billingImageCount)) {
+		applyUsagePostProcessing(info, usage, lastStreamData)
+	}
 	if info.StreamStatus != nil {
-		upstreamFinished := info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone ||
-			info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF
-		requestedN := 1.0
-		if n, ok := info.PriceData.OtherRatios()["n"]; ok {
-			requestedN = n
-		}
 		if upstreamFinished || float64(completedImages) > requestedN {
 			updateOpenAIImageCount(info, completedImages)
 		}

@@ -80,6 +80,16 @@ type TokenCountMeta struct {
 	estimatePromptTokens int
 }
 
+type SeedreamBillingDetails struct {
+	Scene           string
+	InputImages     int
+	GeneratedImages int
+	LowPixelImages  int
+	HighPixelImages int
+	FallbackImages  int
+	TotalPrice      float64
+}
+
 type RelayInfo struct {
 	TokenId           int
 	TokenKey          string
@@ -150,6 +160,8 @@ type RelayInfo struct {
 	ParamOverrideAudit                    []string
 
 	PriceData hosttypes.PriceData
+
+	SeedreamBilling *SeedreamBillingDetails
 
 	// QuotaClamp is set (non-nil) when a quota conversion saturated at the
 	// supported single-request bound (or NaN fallback) while computing this request's charge.
