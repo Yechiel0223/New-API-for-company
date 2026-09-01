@@ -21,6 +21,7 @@ tiktoken_cache
 .gomodcache/
 .cache
 plans
+.worktrees/
 .claude
 .cursor
 
