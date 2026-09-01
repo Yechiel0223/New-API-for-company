@@ -255,6 +255,8 @@ func TestTaskUsageFailureBatchPollingFinalizesAfterRefund(t *testing.T) {
 	assert.Zero(t, event.FinalQuota)
 	assert.Zero(t, event.TotalTokens)
 	assert.Equal(t, "provider failed", event.FailureReason)
+	assert.Greater(t, event.CompletedAt, task.SubmitTime)
+	assert.Equal(t, (event.CompletedAt-task.SubmitTime)*1_000, event.DurationMs)
 }
 
 func TestRecordSyncModelUsageUpsertsOneTerminalRequest(t *testing.T) {

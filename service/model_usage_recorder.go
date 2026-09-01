@@ -79,8 +79,8 @@ func FinalizeTaskUsage(ctx context.Context, task *model.Task, result *relaycommo
 		completedAt = common.GetTimestamp()
 	}
 	durationMs := int64(0)
-	if task.FinishTime > task.SubmitTime {
-		durationMs = (task.FinishTime - task.SubmitTime) * 1_000
+	if completedAt > task.SubmitTime {
+		durationMs = (completedAt - task.SubmitTime) * 1_000
 	}
 
 	final := model.ModelUsageFinal{
