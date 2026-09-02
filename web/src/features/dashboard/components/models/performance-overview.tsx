@@ -100,20 +100,20 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
             >
               {statusLabel}
             </span>
-            <span className='tabular-nums sm:text-right'>
+            <span className='tabular-nums'>
               {t('Success')} {overall?.success_calls ?? 0}/{completed} ·{' '}
               {overall?.success_rate ?? 0}%
             </span>
-            <span className='tabular-nums sm:text-right'>
+            <span className='tabular-nums'>
               {t('Failure')} {overall?.failure_calls ?? 0}
             </span>
-            <span className='tabular-nums sm:text-right'>
+            <span className='tabular-nums'>
               {t('Running')} {overall?.running_calls ?? 0}
             </span>
-            <span className='tabular-nums sm:text-right'>
+            <span className='tabular-nums'>
               {t('Stuck')} {overall?.stuck_calls ?? 0}
             </span>
-            <span className='tabular-nums sm:text-right'>
+            <span className='tabular-nums'>
               {t('Last updated:')}{' '}
               {props.data
                 ? formatShanghaiBucket(props.data.updated_at, 'hour')
@@ -132,13 +132,13 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
                 <span className='truncate font-medium'>
                   {shortModelName(model.model_name)}
                 </span>
-                <span className='text-muted-foreground text-sm tabular-nums sm:text-right'>
+                <span className='text-muted-foreground text-sm tabular-nums'>
                   {t('Success')} {model.success_calls}/
                   {model.success_calls + model.failure_calls} ·{' '}
                   {model.success_rate}%
                 </span>
                 <span
-                  className='text-muted-foreground text-sm tabular-nums sm:text-right'
+                  className='text-muted-foreground text-sm tabular-nums'
                   title={
                     model.successful_duration_samples < 20
                       ? t('Small sample, for reference only')
@@ -148,7 +148,7 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
                   P50 {formatDuration(model.p50_ms)}
                 </span>
                 <span
-                  className='text-muted-foreground text-sm tabular-nums sm:text-right'
+                  className='text-muted-foreground text-sm tabular-nums'
                   title={
                     model.successful_duration_samples < 20
                       ? t('Small sample, for reference only')
