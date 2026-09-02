@@ -16,200 +16,111 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { Activity, Coins, Gauge, Hash, Layers3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUserQuotaDates } from '@/features/dashboard/api'
-import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
-import {
-  buildQueryParams,
-  calculateDashboardStats,
-  getDefaultDays,
-} from '@/features/dashboard/lib'
 import type {
-  QuotaDataItem,
-  DashboardFilters,
+  ModelAnalyticsData,
+  ModelHealthData,
 } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
-import { computeTimeRange } from '@/lib/time'
-import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
+import { formatNumber, formatQuota } from '@/lib/format'
 
 interface LogStatCardsProps {
-  filters?: DashboardFilters
-  onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
-}
-
-const MAX_INLINE_STAT_CHARS = 9
-
-function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
-  const fullValue = formatNumber(value, locale)
-  const displayValue =
-    fullValue.length > MAX_INLINE_STAT_CHARS
-      ? formatCompactNumber(value, locale)
-      : fullValue
-
-  return {
-    displayValue,
-    fullValue,
-  }
+  analytics: ModelAnalyticsData | undefined
+  health: ModelHealthData | undefined
+  loading: boolean
+  error: boolean
+  onRetry: () => void
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
-  const { i18n } = useTranslation()
-  const statCardsConfig = useModelStatCardsConfig()
-  const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = !!(user?.role && user.role >= 10)
-  const [stats, setStats] = useState<{
-    totalQuota: number
-    totalCount: number
-    totalTokens: number
-  } | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
-  const [timeRangeMinutes, setTimeRangeMinutes] = useState(0)
-
-  const { filters, onDataUpdate } = props
-
-  useEffect(() => {
-    const abortController = new AbortController()
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
-
-    setError(false)
-    onDataUpdate?.([], true)
-
-    const timeRange = computeTimeRange(
-      getDefaultDays(filters?.time_granularity),
-      filters?.start_timestamp,
-      filters?.end_timestamp
-    )
-    const timeDiff = (timeRange.end_timestamp - timeRange.start_timestamp) / 60
-    setTimeRangeMinutes(timeDiff)
-
-    void getUserQuotaDates(buildQueryParams(timeRange, filters), isAdmin)
-      .then((res) => {
-        if (abortController.signal.aborted) return
-        const data = res?.data || []
-        setStats(calculateDashboardStats(data))
-        onDataUpdate?.(data, false)
-      })
-      .catch(() => {
-        if (abortController.signal.aborted) return
-        setStats(null)
-        setError(true)
-        onDataUpdate?.([], false)
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) {
-          setLoading(false)
-        }
-      })
-
-    return () => {
-      abortController.abort()
-    }
-  }, [filters, isAdmin, onDataUpdate])
-
-  const adaptedStats = {
-    rpm: stats?.totalCount ?? 0,
-    quota: stats?.totalQuota ?? 0,
-    tpm: stats?.totalTokens ?? 0,
-  }
-
-  const items = statCardsConfig.map((config) => {
-    const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
-    const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-    const formatted =
-      config.key === 'quota'
-        ? {
-            displayValue: formatQuota(rawValue),
-            fullValue: formatQuota(rawValue),
-          }
-        : formatStatNumber(rawValue, locale)
-
-    return {
-      title: config.title,
-      value: formatted.displayValue,
-      fullValue: formatted.fullValue,
-      desc: config.description,
-      icon: config.icon,
-      iconTone: config.iconTone,
-    }
-  })
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const summary = props.analytics?.summary
+  const load = props.health?.current_load
+  const items = [
+    {
+      title: t('Total calls'),
+      value: formatNumber(summary?.total_calls ?? 0, locale),
+      description: summary
+        ? `${t('Success')} ${summary.success_calls} · ${t('Failure')} ${summary.failure_calls} · ${t('Running')} ${summary.running_calls}`
+        : t('Selected range'),
+      icon: Hash,
+      tone: 'info' as const,
+    },
+    {
+      title: t('Total consumption'),
+      value: formatQuota(summary?.total_quota ?? 0),
+      description: t('Selected range'),
+      icon: Coins,
+      tone: 'success' as const,
+    },
+    {
+      title: t('Total Token'),
+      value: formatNumber(summary?.total_tokens ?? 0, locale),
+      description: t('Selected range'),
+      icon: Layers3,
+      tone: 'chart-4' as const,
+    },
+    {
+      title: t('Current RPM'),
+      value: formatNumber(load?.rpm ?? 0, locale),
+      description: t('Last 5 minutes'),
+      icon: Gauge,
+      tone: 'chart-2' as const,
+    },
+    {
+      title: t('Current TPM'),
+      value: formatNumber(load?.tpm ?? 0, locale),
+      description: t('Last 5 minutes'),
+      icon: Activity,
+      tone: 'warning' as const,
+    },
+  ]
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
-        {items.map((it, idx) => {
-          const Icon = it.icon
-          let valueContent
-          if (loading) {
-            valueContent = (
-              <div className='mt-1 flex flex-col gap-1 sm:mt-2 sm:gap-1.5'>
-                <Skeleton className='h-5 w-16 sm:h-7 sm:w-20' />
-                <Skeleton className='hidden h-3.5 w-28 md:block' />
-              </div>
-            )
-          } else if (error) {
-            valueContent = (
-              <>
-                <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>
-                  --
-                </div>
-                <div className='text-muted-foreground/40 mt-1 hidden text-xs md:block'>
-                  {it.desc}
-                </div>
-              </>
-            )
-          } else {
-            valueContent = (
-              <>
-                <div
-                  className='text-foreground mt-1 max-w-full truncate font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
-                  title={it.fullValue}
-                >
-                  {it.value}
-                </div>
-                <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
-                  {it.desc}
-                </div>
-              </>
-            )
-          }
-
+      <div className='divide-border/60 grid grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
+        {items.map((item) => {
+          const Icon = item.icon
           return (
-            <div
-              key={it.title}
-              className={cn(
-                'min-w-0 px-2.5 py-1.5 sm:px-5 sm:py-4',
-                idx === items.length - 1 &&
-                  items.length % 2 !== 0 &&
-                  'col-span-2 sm:col-span-1'
-              )}
-            >
-              <div className='flex min-w-0 items-center gap-1.5 sm:gap-2'>
-                <IconBadge
-                  tone={it.iconTone}
-                  size='stat'
-                  className='size-4 rounded-sm sm:size-7 sm:rounded-md [&>svg]:size-2.5 sm:[&>svg]:size-3.5'
-                >
+            <div key={item.title} className='min-w-0 px-3 py-3 sm:px-5 sm:py-4'>
+              <div className='flex items-center gap-2'>
+                <IconBadge tone={item.tone} size='sm'>
                   <Icon />
                 </IconBadge>
-                <div className='text-muted-foreground truncate text-[11px] leading-4 font-medium tracking-wide uppercase sm:text-xs sm:tracking-wider'>
-                  {it.title}
-                </div>
+                <span className='text-muted-foreground truncate text-xs font-medium'>
+                  {item.title}
+                </span>
               </div>
-
-              {valueContent}
+              {props.loading ? (
+                <Skeleton className='mt-2 h-7 w-24' />
+              ) : (
+                <div
+                  className='mt-2 truncate font-mono text-xl font-bold tabular-nums'
+                  title={props.error ? '--' : item.value}
+                >
+                  {props.error ? '--' : item.value}
+                </div>
+              )}
+              <div className='text-muted-foreground mt-1 truncate text-xs'>
+                {item.description}
+              </div>
             </div>
           )
         })}
       </div>
+      {props.error && (
+        <div className='border-t p-2 text-center'>
+          <Button type='button' size='sm' variant='ghost' onClick={props.onRetry}>
+            {t('Retry')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

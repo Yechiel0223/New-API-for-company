@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { DateTimePicker } from '@/components/datetime-picker'
 import { Dialog } from '@/components/dialog'
+import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -57,6 +58,8 @@ interface ModelsFilterProps {
   currentFilters: DashboardFilters
   onFilterChange: (filters: DashboardFilters) => void
   onReset: () => void
+  availableModels?: string[]
+  triggerLabelKey?: string
   titleKey?: string
   descriptionKey?: string
 }
@@ -66,7 +69,6 @@ interface ModelsFilterProps {
 // instead of leaving the granularity on its previous value (e.g. hourly).
 function granularityForRangeDays(days: number): TimeGranularity {
   if (days <= 1) return 'hour'
-  if (days >= 29) return 'week'
   return 'day'
 }
 
@@ -147,7 +149,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
   const handleChange = (
     field: keyof DashboardFilters,
-    value: Date | string | undefined
+    value: Date | string | string[] | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
     if (field === 'start_timestamp' || field === 'end_timestamp')
@@ -173,7 +175,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
       trigger={
         <Button variant='outline' size='sm'>
           <Filter className='mr-2 h-4 w-4' />
-          {t('Filter')}
+          {t(props.triggerLabelKey ?? 'Filter')}
         </Button>
       }
       title={t(props.titleKey ?? 'Model Analytics Filters')}
@@ -213,6 +215,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
                   size='sm'
                   variant={selectedRange === range.days ? 'default' : 'outline'}
                   onClick={() => handleQuickRange(range.days)}
+                  aria-pressed={selectedRange === range.days}
                   className={cn(
                     'flex-1',
                     selectedRange === range.days &&
@@ -224,6 +227,23 @@ export function ModelsFilter(props: ModelsFilterProps) {
               ))}
             </div>
           </div>
+
+          {props.availableModels && props.availableModels.length > 0 && (
+            <div className='grid gap-2'>
+              <Label htmlFor='model-filter'>{t('Models')}</Label>
+              <MultiSelect
+                id='model-filter'
+                options={props.availableModels.map((model) => ({
+                  value: model,
+                  label: model,
+                }))}
+                selected={filters.models ?? []}
+                onChange={(models) => handleChange('models', models)}
+                placeholder={t('Filter by model')}
+                copyChipOnClick
+              />
+            </div>
+          )}
 
           <SectionDivider label={t('Custom Time Range')} />
 

@@ -16,215 +16,158 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
-import { Gauge, HeartPulse, Timer } from 'lucide-react'
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
 import {
-  formatLatency,
-  formatThroughput,
-  formatUptimePct,
-  getSuccessRateDotClass,
-  getSuccessRateTextClass,
-} from '@/features/performance-metrics/lib/format'
-import type { PerfModelSummary } from '@/features/performance-metrics/types'
+  formatShanghaiBucket,
+  shortModelName,
+} from '@/features/dashboard/lib/model-analytics'
+import type {
+  ModelHealthData,
+  ModelHealthRow,
+} from '@/features/dashboard/types'
 import { cn } from '@/lib/utils'
 
-const PERFORMANCE_WINDOW_HOURS = 24
-const TOP_MODEL_LIMIT = 6
-
-type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
-
-type PerformanceSummary = {
-  totalRequests: number
-  avgLatencyMs: number
-  avgTps: number
-  successRate: number
+interface PerformanceOverviewProps {
+  data: ModelHealthData | undefined
+  loading: boolean
+  error: boolean
+  onWindowChange: (hours: 1 | 24 | 168) => void
+  onRetry: () => void
+  onModelClick: (model: ModelHealthRow) => void
 }
 
-function simpleAverage(
-  rows: PerfModelSummary[],
-  metric: WeightedMetric,
-  isValid: (value: number) => boolean
-): number {
-  let total = 0
-  let count = 0
-
-  for (const row of rows) {
-    const value = Number(row[metric])
-    if (!isValid(value)) continue
-    total += value
-    count++
-  }
-
-  return count > 0 ? total / count : Number.NaN
+function formatDuration(value: number | null): string {
+  if (value == null) return 'Sample shortage'
+  const seconds = Math.round(value / 1000)
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m${seconds % 60}s`
 }
 
-function buildPerformanceSummary(rows: PerfModelSummary[]): PerformanceSummary {
-  return {
-    totalRequests: rows.length,
-    avgLatencyMs: Math.round(
-      simpleAverage(
-        rows,
-        'avg_latency_ms',
-        (value) => Number.isFinite(value) && value > 0
-      )
-    ),
-    avgTps: simpleAverage(
-      rows,
-      'avg_tps',
-      (value) => Number.isFinite(value) && value > 0
-    ),
-    successRate: simpleAverage(rows, 'success_rate', Number.isFinite),
-  }
-}
-
-export function PerformanceOverview() {
+export function PerformanceOverview(props: PerformanceOverviewProps) {
   const { t } = useTranslation()
-  const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
-    queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
-    staleTime: 60 * 1000,
-    retry: false,
-  })
-
-  const models = useMemo(
-    () => metricsQuery.data?.data.models ?? [],
-    [metricsQuery.data]
-  )
-  const summary = useMemo(() => buildPerformanceSummary(models), [models])
-  const topModels = useMemo(() => models.slice(0, TOP_MODEL_LIMIT), [models])
-  const loading = metricsQuery.isLoading
-  const hasData = models.length > 0
-
-  if (!loading && !hasData) {
-    return (
-      <div className='text-muted-foreground overflow-hidden rounded-lg border px-4 py-3 text-center text-xs'>
-        {t('No performance data available')}
-      </div>
-    )
-  }
+  const overall = props.data?.overall
+  const statusLabel =
+    overall?.status === 'healthy'
+      ? t('Healthy')
+      : overall?.status === 'warning'
+        ? t('Warning')
+        : overall?.status === 'fault'
+          ? t('Fault')
+          : t('No calls')
+  const completed =
+    (overall?.success_calls ?? 0) + (overall?.failure_calls ?? 0)
 
   return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='flex flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-2.5 sm:px-5 sm:py-3'>
-        {/* Title */}
-        <div className='flex items-center gap-1.5'>
-          <IconBadge tone='success' size='xs'>
-            <HeartPulse />
-          </IconBadge>
-          <span className='text-xs font-semibold whitespace-nowrap'>
-            {t('Performance health')}
-          </span>
+    <section
+      className='overflow-hidden rounded-lg border'
+      aria-label={t('Performance health')}
+    >
+      <div className='flex flex-wrap items-center gap-2 border-b px-4 py-3'>
+        <h3 className='mr-auto text-sm font-semibold'>
+          {t('Performance health')}
+        </h3>
+        {([1, 24, 168] as const).map((hours) => (
+          <Button
+            key={hours}
+            type='button'
+            size='sm'
+            variant={props.data?.window_hours === hours ? 'default' : 'ghost'}
+            aria-pressed={props.data?.window_hours === hours}
+            onClick={() => props.onWindowChange(hours)}
+          >
+            {hours === 1 ? '1h' : hours === 24 ? '24h' : '7d'}
+          </Button>
+        ))}
+      </div>
+      {props.loading ? (
+        <div className='space-y-2 p-4'>
+          <Skeleton className='h-6 w-full' />
+          <Skeleton className='h-12 w-full' />
         </div>
-
-        {/* Separator */}
-        <div className='bg-border hidden h-4 w-px sm:block' />
-
-        {/* 3 KPI inline metrics */}
-        {loading ? (
-          <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
-            {['success', 'latency', 'throughput'].map((key) => (
-              <div key={key} className='flex items-center gap-1.5'>
-                <Skeleton className='h-3 w-14' />
-                <Skeleton className='h-4 w-16' />
+      ) : props.error ? (
+        <div className='p-4 text-center text-sm'>
+          <div>{t('Unable to load analytics')}</div>
+          <Button type='button' size='sm' variant='ghost' onClick={props.onRetry}>
+            {t('Retry')}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 px-4 py-3 text-xs'>
+            <span
+              className={cn(
+                'font-medium',
+                overall?.status === 'healthy' && 'text-success',
+                overall?.status === 'warning' && 'text-warning',
+                overall?.status === 'fault' && 'text-destructive'
+              )}
+            >
+              {statusLabel}
+            </span>
+            <span>
+              {t('Success')} {overall?.success_calls ?? 0}/{completed} ·{' '}
+              {overall?.success_rate ?? 0}%
+            </span>
+            <span>{t('Failure')} {overall?.failure_calls ?? 0}</span>
+            <span>{t('Running')} {overall?.running_calls ?? 0}</span>
+            <span>{t('Stuck')} {overall?.stuck_calls ?? 0}</span>
+            <span className='ml-auto'>
+              {t('Last updated:')}{' '}
+              {props.data
+                ? formatShanghaiBucket(props.data.updated_at, 'hour')
+                : '--'}
+            </span>
+          </div>
+          <div className='divide-y'>
+            {props.data?.models.map((model) => (
+              <button
+                key={model.model_name}
+                type='button'
+                className='hover:bg-muted/40 grid w-full gap-1 px-4 py-3 text-left sm:grid-cols-[minmax(10rem,1fr)_auto_auto_auto] sm:items-center sm:gap-4'
+                onClick={() => props.onModelClick(model)}
+                title={model.model_name}
+              >
+                <span className='font-medium'>
+                  {shortModelName(model.model_name)}
+                </span>
+                <span className='text-sm'>
+                  {t('Success')} {model.success_calls}/
+                  {model.success_calls + model.failure_calls} ·{' '}
+                  {model.success_rate}%
+                </span>
+                <span
+                  className='text-sm'
+                  title={
+                    model.successful_duration_samples < 20
+                      ? t('Small sample, for reference only')
+                      : undefined
+                  }
+                >
+                  P50 {formatDuration(model.p50_ms)}
+                </span>
+                <span
+                  className='text-sm'
+                  title={
+                    model.successful_duration_samples < 20
+                      ? t('Small sample, for reference only')
+                      : undefined
+                  }
+                >
+                  P95 {formatDuration(model.p95_ms)}
+                </span>
+              </button>
+            ))}
+            {props.data?.models.length === 0 && (
+              <div className='text-muted-foreground p-6 text-center text-sm'>
+                {t('No calls')}
               </div>
-            ))}
+            )}
           </div>
-        ) : (
-          <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
-            <InlineMetric
-              icon={HeartPulse}
-              label={t('Success rate')}
-              value={formatUptimePct(summary.successRate)}
-              valueClassName={getSuccessRateTextClass(summary.successRate)}
-              tone='success'
-            />
-            <InlineMetric
-              icon={Timer}
-              label={t('Average latency')}
-              value={formatLatency(summary.avgLatencyMs)}
-              tone='warning'
-            />
-            <InlineMetric
-              icon={Gauge}
-              label={t('Throughput')}
-              value={formatThroughput(summary.avgTps)}
-              tone='info'
-            />
-          </div>
-        )}
-
-        {/* Separator */}
-        <div className='bg-border hidden h-4 w-px lg:block' />
-
-        {/* Top models inline badges */}
-        {!loading && hasData && (
-          <div className='flex flex-wrap items-center gap-1.5'>
-            {topModels.map((model) => (
-              <ModelBadge key={model.model_name} model={model} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function InlineMetric(props: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-  valueClassName?: string
-  tone: IconBadgeTone
-}) {
-  const Icon = props.icon
-
-  return (
-    <div className='flex items-center gap-1.5'>
-      <IconBadge tone={props.tone} size='xs'>
-        <Icon />
-      </IconBadge>
-      <span className='text-muted-foreground text-[11px]'>{props.label}</span>
-      <span
-        className={cn(
-          'font-mono text-xs font-semibold tabular-nums',
-          props.valueClassName
-        )}
-      >
-        {props.value}
-      </span>
-    </div>
-  )
-}
-
-function ModelBadge(props: { model: PerfModelSummary }) {
-  const model = props.model
-
-  return (
-    <span className='bg-muted/50 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'>
-      <span className='max-w-[10rem] truncate font-mono text-[11px]'>
-        {model.model_name}
-      </span>
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          getSuccessRateDotClass(model.success_rate)
-        )}
-        aria-hidden='true'
-      />
-      <span
-        className={cn(
-          'font-mono text-[11px] font-semibold tabular-nums',
-          getSuccessRateTextClass(model.success_rate)
-        )}
-      >
-        {formatUptimePct(model.success_rate)}
-      </span>
-    </span>
+        </>
+      )}
+    </section>
   )
 }

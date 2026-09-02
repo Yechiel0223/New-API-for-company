@@ -56,7 +56,7 @@ function isModelAnalyticsChartTab(
 }
 
 function isTimeRangePresetDays(value: unknown): value is number {
-  return TIME_RANGE_PRESETS.some((preset) => preset.days === value)
+  return value === 29 || TIME_RANGE_PRESETS.some((preset) => preset.days === value)
 }
 
 export function cleanFilters<T extends Record<string, unknown>>(
@@ -114,7 +114,9 @@ export function getSavedChartPreferences(): DashboardChartPreferences {
         ? parsed.modelAnalyticsChart
         : fallbackPreferences.modelAnalyticsChart,
       defaultTimeRangeDays: isTimeRangePresetDays(parsed.defaultTimeRangeDays)
-        ? parsed.defaultTimeRangeDays
+        ? parsed.defaultTimeRangeDays === 29
+          ? 30
+          : parsed.defaultTimeRangeDays
         : fallbackPreferences.defaultTimeRangeDays,
       defaultTimeGranularity: isTimeGranularity(parsed.defaultTimeGranularity)
         ? parsed.defaultTimeGranularity
@@ -149,6 +151,7 @@ export function buildDefaultDashboardFilters(
     start_timestamp: start,
     end_timestamp: end,
     time_granularity: preferences.defaultTimeGranularity,
+    models: [],
   }
 }
 

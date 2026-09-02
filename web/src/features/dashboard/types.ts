@@ -189,6 +189,103 @@ export interface DashboardFilters {
   end_timestamp?: Date
   time_granularity?: TimeGranularity
   username?: string
+  models?: string[]
+}
+
+export type AnalyticsGranularity = 'hour' | 'day' | 'week'
+export type ModelHealthStatus = 'no_data' | 'healthy' | 'warning' | 'fault'
+
+export interface ModelAnalyticsQuery {
+  start_timestamp: number
+  end_timestamp: number
+  granularity?: AnalyticsGranularity
+  username?: string
+  models?: string[]
+}
+
+export interface AnalyticsRange {
+  start: number
+  end: number
+  granularity: AnalyticsGranularity
+  timezone: 'Asia/Shanghai'
+}
+
+export interface AnalyticsSummary {
+  total_calls: number
+  success_calls: number
+  failure_calls: number
+  running_calls: number
+  total_quota: number
+  total_tokens: number
+  peak_rpm: number
+  peak_rpm_at: number
+  peak_tpm: number
+  peak_tpm_at: number
+}
+
+export interface AnalyticsBucket {
+  bucket_start: number
+  bucket_end: number
+  model_name: string
+  total_calls: number
+  success_calls: number
+  failure_calls: number
+  running_calls: number
+  quota: number
+  tokens: number
+  output_counts: Record<string, number>
+}
+
+export interface AnalyticsModelTotal {
+  model_name: string
+  total_calls: number
+  success_calls: number
+  failure_calls: number
+  running_calls: number
+  quota: number
+  tokens: number
+  output_counts: Record<string, number>
+}
+
+export interface ModelAnalyticsData {
+  range: AnalyticsRange
+  summary: AnalyticsSummary
+  series: AnalyticsBucket[]
+  models: AnalyticsModelTotal[]
+  available_models: string[]
+  updated_at: number
+}
+
+export interface ModelHealthRow {
+  model_name: string
+  status: ModelHealthStatus
+  total_calls: number
+  success_calls: number
+  failure_calls: number
+  running_calls: number
+  stuck_calls: number
+  success_rate: number
+  p50_ms: number | null
+  p95_ms: number | null
+  successful_duration_samples: number
+  latest_failure_at: number
+  latest_failure_reason: string
+}
+
+export interface ModelHealthData {
+  window_hours: 1 | 24 | 168
+  overall: {
+    status: ModelHealthStatus
+    total_calls: number
+    success_calls: number
+    failure_calls: number
+    running_calls: number
+    stuck_calls: number
+    success_rate: number
+  }
+  current_load: { rpm: number; tpm: number; window_minutes: 5 }
+  models: ModelHealthRow[]
+  updated_at: number
 }
 
 export type ConsumptionDistributionChartType = 'bar' | 'area'

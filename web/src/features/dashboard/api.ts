@@ -20,6 +20,9 @@ import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
+  ModelAnalyticsData,
+  ModelAnalyticsQuery,
+  ModelHealthData,
   QuotaDataItem,
   UptimeGroupResult,
 } from './types'
@@ -82,6 +85,33 @@ export async function getFlowQuotaDates(
     message?: string
   }>(endpoint, { params })
   return res.data
+}
+
+export async function getModelAnalytics(
+  params: ModelAnalyticsQuery
+): Promise<ModelAnalyticsData> {
+  const res = await api.get<{
+    success: boolean
+    data: ModelAnalyticsData
+    message?: string
+  }>('/api/data/model-analytics', {
+    params: {
+      ...params,
+      models: params.models?.length ? [...params.models].sort().join(',') : undefined,
+    },
+  })
+  return res.data.data
+}
+
+export async function getModelHealth(
+  hours: 1 | 24 | 168
+): Promise<ModelHealthData> {
+  const res = await api.get<{
+    success: boolean
+    data: ModelHealthData
+    message?: string
+  }>('/api/data/model-analytics/health', { params: { hours } })
+  return res.data.data
 }
 
 // Get uptime monitoring status for all services
