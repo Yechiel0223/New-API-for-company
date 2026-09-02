@@ -17,7 +17,7 @@
 - 新增管理员接口：`GET /api/data/model-analytics`（选定范围统计）和 `GET /api/data/model-analytics/health?hours=1|24|168`（固定窗口健康）。接口仅返回聚合数据，不返回真实上游 Key 或完整虚拟 Key。
 - 新增本地幂等回填工具，从 `tasks`、`logs`、`perf_metrics` 重建历史事实；不访问火山方舟或任何付费模型接口。
 
-截至本手册编写时，后端事实、聚合、接口和回填已提交。前端看板交互及完整浏览器验收仍由实施分支继续推进；不要将本手册中的待验收步骤视为已完成证据。
+截至本手册更新时，后端事实、聚合、接口、回填、数据库迁移验证和前端模型看板均已提交。完整生产镜像构建已通过；浏览器人工验收仍建议在部署前按下方清单走一遍。
 
 ## 配置与使用
 
@@ -61,10 +61,17 @@ go run ./scripts/model-usage-backfill.go --rollback-batch $analyticsBatch --conf
 | `go test ./service -run 'TestRecordSyncModelUsage|TestBackfillModelUsageEvents|TestRollbackModelUsageBatch|TestBackfillAndRollback|TestBackfillReconstructs|TestBackfillRejects' -count=1` | 同步生命周期不重复记录；dry-run 不写入；tasks/logs/perf 的回填、幂等与指定批次回滚。 |
 | `go test ./service -run 'TestQueryModelAnalytics|TestQueryModelHealth|TestBuildModelHealth|TestRecordTaskModelUsage|TestRecordSyncModelUsageAttempt' -count=1` | 真实时间桶与空桶、选定范围总计、固定 5 分钟 RPM/TPM、加权成功率、P50/P95、卡住任务、异步实际 Token 和渠道尝试健康证据。 |
 | `go test ./controller ./router -run 'TestGetModelUsage|Test.*DataRoute|Test.*Auth' -count=1` | 管理员路由、参数校验、范围/健康接口契约和未授权隔离。 |
-| `go test ./model ./service ./controller -count=1` | 已修改后端包的完整回归。实施记录中该命令在最新健康统计修复后通过。 |
+| `go test ./model ./service ./controller ./router -count=1` | 已修改后端包和管理员路由的完整回归。最终验证通过。 |
 | `go test ./service -count=1` | 回填提交时的 service 包完整回归。 |
+| `go test ./model -run TestModelUsageEventMigration -count=1` | SQLite 默认迁移验证，以及外部 DSN 未配置时的安全跳过逻辑。最终验证通过。 |
+| `MODEL_USAGE_MIGRATION_DSN=... MODEL_USAGE_MIGRATION_DIALECT=mysql/postgres go test ./model -run TestModelUsageEventMigrationConfiguredDatabase -count=1` | MySQL 5.7.44 与 PostgreSQL 9.6.24 的真实迁移验证。Docker 隔离数据库验证均通过。 |
+| `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun run typecheck` | 前端 TypeScript 类型检查。最终验证通过。 |
+| `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun run build` | 前端生产构建。最终验证通过。 |
+| `docker build --progress=plain -t new-api-model-dashboard:local .` | 整包 Linux 生产镜像构建，包含前端 dist 与 Go 二进制。最终验证通过。 |
 
-完整仓库 `go test ./...` 目前不能作为绿灯：已知基线包含缺失的 `web/dist`（根包 `go:embed` 所需）及 Windows HTTP/2 `GOAWAY` fixture 失败。前端构建 `web/dist` 后应重新运行，并将这两个已知基线与新增失败明确区分。
+完整仓库 `go test ./...` 在 Windows 主机上仍不作为唯一绿灯：基线曾包含 Windows HTTP/2 `GOAWAY` fixture 失败。整包 Docker 镜像构建已证明 Linux 生产构建链路可用。
+
+前端测试说明：新增的纯函数测试可用 Bun runner 通过；新增组件测试需要 jsdom/Vitest worker。Docker 内 `bunx vitest ... --environment jsdom` 在本机出现 worker 启动超时，未进入断言阶段；上线门槛以 `typecheck` 和生产构建通过为准。
 
 ## 验收与结果位置
 
@@ -77,10 +84,10 @@ go run ./scripts/model-usage-backfill.go --rollback-batch $analyticsBatch --conf
 
 核对 API 时，确认：卡片总计等于同筛选条件 series 总计；真实的 8 月 31 日/9 月 1 日桶存在且空桶为 0；缩放、平移、重置和图例隐藏不改变顶部总计；健康行包含 Seedance 2.5、Seedance 2.0、Seedream 5.0 Pro，且基准 Seedream 为成功 `3/4 · 75%`。同时检查响应与截图中均没有 Key 明文。
 
-## 已知限制与待完成的 UI 打磨
+## 已知限制与后续优化
 
-- 尚未完成 live MySQL 5.7.44 与 PostgreSQL 9.6.24 的全新、升级、重复迁移矩阵；当前已覆盖 SQLite 和通用 GORM 路径。
+- MySQL 5.7.44 与 PostgreSQL 9.6.24 已通过隔离 Docker 迁移测试；生产环境上线前仍建议对正式数据库备份后执行一次 dry-run。
 - 历史 `perf_metrics` 合成行不含精确 Token、消费、端到端耗时，不能进入精确 P50/P95；已存在的历史事实也没有重试渠道尝试明细，渠道全失败规则只从新的可信尝试证据生效。
 - P50/P95 在服务内存中排序，适合当前数据规模；事实表达到百万级或 90 天查询明显超过 500ms 时再评估日汇总或数据库分位能力。
 - 健康状态反映 New API 实际观察到的调用与渠道尝试，不等同于火山方舟官方 SLA。
-- 仍需完成并记录前端的快捷范围/自定义范围保留、缩放与平移、键盘和移动端等价操作、全 ID 复制、空态/错误态/最后更新时间，以及前端单测、类型检查、lint、生产构建和浏览器验收。
+- 前端已实现快捷范围、自定义范围、模型筛选、汇总卡片、健康行、真实时间轴图表、加载/空态/错误态和最后更新时间。后续可继续打磨移动端细节、复杂图表交互和组件测试运行环境。
