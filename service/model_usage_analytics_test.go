@@ -396,7 +396,7 @@ func TestQueryModelAnalyticsAndHealthUseFactTableFilters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), health.Overall.TotalCalls)
 	assert.Equal(t, ModelHealthWarning, health.Overall.Status)
-	_, err = QueryModelHealth(context.Background(), 2, now)
+	_, err = QueryModelHealth(context.Background(), 721, now)
 	require.Error(t, err)
 }
 

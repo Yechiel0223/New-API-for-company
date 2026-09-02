@@ -92,3 +92,40 @@ go run ./scripts/model-usage-backfill.go --rollback-batch $analyticsBatch --conf
 - P50/P95 在服务内存中排序，适合当前数据规模；事实表达到百万级或 90 天查询明显超过 500ms 时再评估日汇总或数据库分位能力。
 - 健康状态反映 New API 实际观察到的调用与渠道尝试，不等同于火山方舟官方 SLA。
 - 前端已实现快捷范围、自定义范围、模型筛选、汇总卡片、健康行、真实时间轴图表、加载/空态/错误态和最后更新时间。后续可继续打磨移动端细节、复杂图表交互和组件测试运行环境。
+
+## 2026-09-02 UI 快速修整记录
+
+本次修整目标是让 `/dashboard/models` 的两张主要图表更容易读懂，不改变统计口径、计费逻辑或付费模型调用行为。
+
+改动内容：
+
+- “消耗趋势”图表的纵坐标从内部 quota 原始值改为当前展示货币金额，当前配置下显示为人民币金额；tooltip 仍保留原始消耗的格式化展示。
+- 移除两张图底部容易误导的图内缩放条和放大/缩小按钮，时间范围统一由页面顶部的“今天 / 24 小时 / 7 天 / 30 天 / 自定义”控制。
+- 图表卡片头部增加当前所选时间范围说明，避免用户不知道当前图表统计的是哪段时间。
+- “模型调用分析”增加当前 tab 的简短说明：调用趋势、调用次数分布、调用次数排行分别说明其含义。
+- “性能健康”移除独立的 `1h / 24h / 7d` 切换按钮，改为跟随页面顶部时间范围。
+- 健康接口从仅支持 `1/24/168` 小时放宽到 `1–720` 小时，保证选择 30 天时也能按同一范围查询；超过 720 小时仍拒绝，避免过大查询拖慢页面。
+
+已执行验证：
+
+| 命令 | 结果 | 说明 |
+| --- | --- | --- |
+| `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun test src/features/dashboard/lib/__tests__/model-analytics.test.ts` | 通过，5 pass / 0 fail | 验证时间范围、模型简称、真实桶保留、长范围不再启用图内缩放、消耗图使用展示货币数值且保留原始 quota。 |
+| `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun run typecheck` | 通过 | 验证前端 TypeScript 类型。 |
+| `go test ./controller ./service -run "ModelUsage|ModelHealth"` | 通过 | 验证模型看板接口、健康窗口参数和服务层统计逻辑。 |
+| `docker build --progress=plain -t new-api-model-dashboard:local .` | 通过 | 验证完整生产镜像可构建，包含前端 dist 与 Go 后端二进制。 |
+| `Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:3000/api/status'` | 通过 | 验证本地预览服务启动正常。 |
+
+本地预览容器已重启为最新镜像：
+
+```powershell
+docker rm -f new-api-model-dashboard-preview
+docker run -d --name new-api-model-dashboard-preview --restart unless-stopped --network ark-seedance-gateway_default --network-alias new-api -p 127.0.0.1:3000:3000 -v "D:\new-api\deploy\data:/data" -v "D:\new-api\deploy\logs:/app/logs" -e TRUSTED_PROXIES=none -e SESSION_SECRET=9d4028fa62ff238e601bceee1f770589a66b46de20bfb2ece61cb0775745cccc -e BATCH_UPDATE_ENABLED=false -e ERROR_LOG_ENABLED=true -e SQL_DSN="postgresql://new_api:8fbf05f5248bd015b37015a7a9c7352de12cafc3a2dc43d47e97d7dd75c594e7@postgres:5432/new_api" -e TZ=Asia/Shanghai -e SESSION_COOKIE_SECURE=false -e UPDATE_TASK=true -e NODE_NAME=local-poc new-api-model-dashboard:local --log-dir /app/logs
+```
+
+浏览器复核方式：
+
+1. 打开或刷新 `http://localhost:3000/dashboard/models`，建议使用 `Ctrl+F5` 强制刷新静态资源。
+2. 切换“今天 / 24 小时 / 7 天 / 30 天”，确认顶部卡片、性能健康、消耗趋势和调用趋势都跟随同一时间范围。
+3. 查看“消耗趋势”的纵坐标，应显示人民币金额口径，不再显示 `80000000` 这类内部 quota 原始值。
+4. 确认两张图底部不再出现图内缩放条，时间轴标签显示真实日期/时间。

@@ -34,7 +34,6 @@ interface PerformanceOverviewProps {
   data: ModelHealthData | undefined
   loading: boolean
   error: boolean
-  onWindowChange: (hours: 1 | 24 | 168) => void
   onRetry: () => void
   onModelClick: (model: ModelHealthRow) => void
 }
@@ -65,22 +64,16 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
       className='overflow-hidden rounded-lg border'
       aria-label={t('Performance health')}
     >
-      <div className='flex flex-wrap items-center gap-2 border-b px-4 py-3'>
-        <h3 className='mr-auto text-sm font-semibold'>
-          {t('Performance health')}
-        </h3>
-        {([1, 24, 168] as const).map((hours) => (
-          <Button
-            key={hours}
-            type='button'
-            size='sm'
-            variant={props.data?.window_hours === hours ? 'default' : 'ghost'}
-            aria-pressed={props.data?.window_hours === hours}
-            onClick={() => props.onWindowChange(hours)}
-          >
-            {hours === 1 ? '1h' : hours === 24 ? '24h' : '7d'}
-          </Button>
-        ))}
+      <div className='bg-muted/20 flex flex-wrap items-center gap-2 border-b px-4 py-3'>
+        <div className='mr-auto'>
+          <h3 className='text-sm font-semibold'>
+            {t('Performance health')}
+          </h3>
+          <p className='text-muted-foreground mt-1 text-xs'>
+            {t('Follows the selected dashboard range')}
+            {props.data?.window_hours ? ` · ${props.data.window_hours}h` : ''}
+          </p>
+        </div>
       </div>
       {props.loading ? (
         <div className='space-y-2 p-4'>

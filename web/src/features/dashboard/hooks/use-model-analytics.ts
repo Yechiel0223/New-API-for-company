@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 
 import { getModelAnalytics, getModelHealth } from '@/features/dashboard/api'
 import type {
@@ -25,8 +25,15 @@ import type {
   ModelAnalyticsQuery,
 } from '@/features/dashboard/types'
 
+function deriveHealthHours(filters: DashboardFilters): number {
+  if (!filters.start_timestamp || !filters.end_timestamp) return 24
+  const milliseconds =
+    filters.end_timestamp.getTime() - filters.start_timestamp.getTime()
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return 24
+  return Math.min(720, Math.max(1, Math.ceil(milliseconds / 3_600_000)))
+}
+
 export function useModelAnalytics(filters: DashboardFilters, enabled: boolean) {
-  const [healthHours, setHealthHours] = useState<1 | 24 | 168>(24)
   const query = useMemo<ModelAnalyticsQuery | null>(() => {
     if (!filters.start_timestamp || !filters.end_timestamp) return null
     const start = Math.floor(filters.start_timestamp.getTime() / 1000)
@@ -40,6 +47,7 @@ export function useModelAnalytics(filters: DashboardFilters, enabled: boolean) {
       models: filters.models?.length ? [...filters.models].sort() : undefined,
     }
   }, [filters])
+  const healthHours = useMemo(() => deriveHealthHours(filters), [filters])
 
   const analyticsQuery = useQuery({
     queryKey: [
@@ -73,7 +81,6 @@ export function useModelAnalytics(filters: DashboardFilters, enabled: boolean) {
     analyticsQuery,
     healthQuery,
     healthHours,
-    setHealthHours,
     refreshAll,
     validRange: query != null,
   }

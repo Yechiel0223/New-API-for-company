@@ -62,7 +62,6 @@ describe('PerformanceOverview', () => {
         data={health}
         loading={false}
         error={false}
-        onWindowChange={vi.fn()}
         onRetry={vi.fn()}
         onModelClick={vi.fn()}
       />
@@ -93,7 +92,6 @@ describe('PerformanceOverview', () => {
         }}
         loading={false}
         error={false}
-        onWindowChange={vi.fn()}
         onRetry={vi.fn()}
         onModelClick={vi.fn()}
       />

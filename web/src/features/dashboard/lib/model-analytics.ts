@@ -23,7 +23,11 @@ import type {
   AnalyticsGranularity,
 } from '@/features/dashboard/types'
 import dayjs from '@/lib/dayjs'
-import { formatQuota } from '@/lib/format'
+import {
+  formatQuota,
+  parseQuotaFromDollars,
+  quotaUnitsToDollars,
+} from '@/lib/format'
 
 const SHANGHAI_TIMEZONE = 'Asia/Shanghai'
 
@@ -95,6 +99,7 @@ type ChartDatum = {
   success: number
   failure: number
   quota: number
+  quotaAmount: number
   tokens: number
   imageCount: number
   videoCount: number
@@ -108,7 +113,6 @@ export interface ModelAnalyticsChartOptions {
 export interface ModelAnalyticsChartSpecs {
   consumption: IChartSpec & {
     data: Array<{ id: string; values: ChartDatum[] }>
-    dataZoom?: Array<Record<string, unknown>>
   }
   calls: IChartSpec
   proportion: IChartSpec
@@ -131,28 +135,45 @@ export function buildModelAnalyticsCharts(
     success: bucket.success_calls,
     failure: bucket.failure_calls,
     quota: bucket.quota,
+    quotaAmount: quotaUnitsToDollars(bucket.quota),
     tokens: bucket.tokens,
     imageCount: bucket.output_counts.image ?? 0,
     videoCount: bucket.output_counts.video ?? 0,
   }))
-  const distinctBuckets = new Set(values.map((row) => row.bucketStart)).size
-  const dataZoom =
-    distinctBuckets > 12
-      ? [
-          {
-            orient: 'bottom' as const,
-            start: 0,
-            end: 100,
-            filterMode: 'filter' as const,
-          },
-        ]
-      : undefined
-  const axes = [
-    {
-      orient: 'bottom' as const,
-      type: 'band' as const,
+  const timeAxis = {
+    orient: 'bottom' as const,
+    type: 'band' as const,
+    label: {
+      autoHide: true,
+      autoRotate: true,
+      autoLimit: true,
+      style: { fontSize: 11 },
     },
-    { orient: 'left' as const, type: 'linear' as const },
+  }
+  const leftAxis = {
+    orient: 'left' as const,
+    type: 'linear' as const,
+    label: {
+      autoLimit: true,
+      style: { fontSize: 11 },
+    },
+  }
+  const amountAxis = {
+    ...leftAxis,
+    label: {
+      ...leftAxis.label,
+      formatMethod: (value: number) => formatQuota(parseQuotaFromDollars(value)),
+    },
+  }
+  const axes = [
+    timeAxis,
+    leftAxis,
+  ]
+  const amountAxes = [
+    timeAxis,
+    {
+      ...amountAxis,
+    },
   ]
   const legends = { visible: true, selectMode: 'multiple' as const }
   const totals = new Map<string, { calls: number; quota: number }>()
@@ -170,19 +191,17 @@ export function buildModelAnalyticsCharts(
   }))
   const totalQuota = values.reduce((sum, row) => sum + row.quota, 0)
   const totalCalls = values.reduce((sum, row) => sum + row.calls, 0)
-  const zoomable = { dataZoom, roam: distinctBuckets > 12 }
 
   return {
     consumption: {
       type: 'bar',
       data: [{ id: 'model-consumption', values }],
       xField: 'timeLabel',
-      yField: 'quota',
+      yField: 'quotaAmount',
       seriesField: 'model',
       stack: true,
-      axes,
+      axes: amountAxes,
       legends,
-      ...zoomable,
       tooltip: {
         mark: {
           content: [
@@ -214,7 +233,6 @@ export function buildModelAnalyticsCharts(
       seriesField: 'model',
       axes,
       legends,
-      ...zoomable,
       point: { visible: false },
       background: { fill: 'transparent' },
     } as IChartSpec,

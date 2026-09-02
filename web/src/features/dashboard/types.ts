@@ -273,7 +273,7 @@ export interface ModelHealthRow {
 }
 
 export interface ModelHealthData {
-  window_hours: 1 | 24 | 168
+  window_hours: number
   overall: {
     status: ModelHealthStatus
     total_calls: number

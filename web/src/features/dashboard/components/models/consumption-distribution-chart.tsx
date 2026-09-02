@@ -17,14 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { VChart } from '@visactor/react-vchart'
-import { AreaChart, BarChart3, WalletCards, ZoomIn, ZoomOut } from 'lucide-react'
+import { AreaChart, BarChart3, WalletCards } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { useTheme } from '@/context/theme-provider'
-import { buildModelAnalyticsCharts } from '@/features/dashboard/lib/model-analytics'
+import {
+  buildModelAnalyticsCharts,
+  formatShanghaiRange,
+} from '@/features/dashboard/lib/model-analytics'
 import type {
   ConsumptionDistributionChartType,
   ModelAnalyticsData,
@@ -48,7 +51,6 @@ export function ConsumptionDistributionChart(
   const [chartType, setChartType] = useState<ConsumptionDistributionChartType>(
     props.defaultChartType ?? 'bar'
   )
-  const [zoom, setZoom] = useState({ start: 0, end: 100 })
   const charts = useMemo(
     () =>
       buildModelAnalyticsCharts(props.analytics?.series ?? [], {
@@ -61,39 +63,37 @@ export function ConsumptionDistributionChart(
   const spec = {
     ...baseSpec,
     type: chartType,
-    dataZoom: baseSpec.dataZoom
-      ? [{ ...baseSpec.dataZoom[0], ...zoom }]
-      : undefined,
     theme: resolvedTheme === 'dark' ? 'dark' : 'light',
   }
-  const changeZoom = (amount: number) => {
-    setZoom((current) => {
-      const width = Math.max(10, Math.min(100, current.end - current.start + amount))
-      return { start: 0, end: width }
-    })
-  }
+  const rangeText = props.analytics?.range
+    ? formatShanghaiRange(props.analytics.range)
+    : ''
 
   return (
     <section className='overflow-hidden rounded-lg border'>
-      <header className='flex flex-wrap items-center gap-2 border-b px-4 py-3'>
-        <IconBadge tone='success' size='sm'><WalletCards /></IconBadge>
-        <h3 className='text-sm font-semibold'>{t('Consumption trend')}</h3>
-        <span className='text-muted-foreground text-xs'>
-          {t('Total:')} {formatQuota(props.analytics?.summary.total_quota ?? 0)}
-        </span>
+      <header className='bg-muted/20 flex flex-wrap items-center gap-3 border-b px-4 py-3'>
+        <IconBadge tone='success' size='sm'>
+          <WalletCards />
+        </IconBadge>
+        <div className='min-w-0'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <h3 className='text-sm font-semibold'>{t('Consumption trend')}</h3>
+            <span className='text-muted-foreground text-xs'>
+              {t('Total:')} {formatQuota(props.analytics?.summary.total_quota ?? 0)}
+            </span>
+          </div>
+          <p className='text-muted-foreground mt-1 truncate text-xs'>
+            {rangeText
+              ? `${t('Selected range')}: ${rangeText}`
+              : t('Grouped by model, shown in display currency')}
+          </p>
+        </div>
         <div className='ml-auto flex items-center gap-1'>
           <Button type='button' size='icon-sm' variant={chartType === 'bar' ? 'default' : 'ghost'} aria-label={t('Bar Chart')} onClick={() => setChartType('bar')}><BarChart3 /></Button>
           <Button type='button' size='icon-sm' variant={chartType === 'area' ? 'default' : 'ghost'} aria-label={t('Area Chart')} onClick={() => setChartType('area')}><AreaChart /></Button>
-          {baseSpec.dataZoom && (
-            <>
-              <Button type='button' size='icon-sm' variant='ghost' aria-label={t('Zoom in')} onClick={() => changeZoom(-20)}><ZoomIn /></Button>
-              <Button type='button' size='icon-sm' variant='ghost' aria-label={t('Zoom out')} onClick={() => changeZoom(20)}><ZoomOut /></Button>
-              <Button type='button' size='sm' variant='ghost' onClick={() => setZoom({ start: 0, end: 100 })}>{t('Reset zoom')}</Button>
-            </>
-          )}
         </div>
       </header>
-      <div className='h-[320px] p-2' onDoubleClick={() => setZoom({ start: 0, end: 100 })}>
+      <div className='h-[320px] px-3 py-4'>
         {props.loading ? (
           <div className='bg-muted/40 h-full animate-pulse rounded-md' />
         ) : props.error ? (

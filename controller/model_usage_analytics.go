@@ -85,7 +85,7 @@ func parseModelUsageHealthHours(c *gin.Context) (int, string) {
 		return 24, ""
 	}
 	hours, err := strconv.Atoi(rawHours)
-	if err != nil || rawHours != strconv.Itoa(hours) || (hours != 1 && hours != 24 && hours != 168) {
+	if err != nil || rawHours != strconv.Itoa(hours) || hours < 1 || hours > 720 {
 		return 0, "invalid hours"
 	}
 	return hours, ""

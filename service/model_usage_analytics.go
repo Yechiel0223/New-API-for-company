@@ -194,8 +194,8 @@ func QueryModelAnalytics(ctx context.Context, query ModelAnalyticsQuery) (ModelA
 }
 
 func QueryModelHealth(ctx context.Context, hours int, now time.Time) (ModelHealthResult, error) {
-	if hours != 1 && hours != 24 && hours != 168 {
-		return ModelHealthResult{}, fmt.Errorf("model health hours must be 1, 24, or 168")
+	if hours < 1 || hours > 720 {
+		return ModelHealthResult{}, fmt.Errorf("model health hours must be between 1 and 720")
 	}
 	if now.IsZero() {
 		now = time.Now()

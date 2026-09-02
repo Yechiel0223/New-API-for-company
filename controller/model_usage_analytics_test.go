@@ -78,12 +78,12 @@ func TestGetModelUsageAnalyticsReturnsServiceResult(t *testing.T) {
 	assert.NotZero(t, payload.Data.UpdatedAt)
 }
 
-func TestGetModelUsageHealthAcceptsOnlySupportedWindows(t *testing.T) {
+func TestGetModelUsageHealthAcceptsBoundedWindows(t *testing.T) {
 	setupModelUsageAnalyticsControllerTestDB(t)
 	r := gin.New()
 	r.GET("/health", GetModelUsageHealth)
 
-	for _, hours := range []string{"1", "24", "168"} {
+	for _, hours := range []string{"1", "24", "168", "720"} {
 		t.Run(hours, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health?hours="+hours, nil))
@@ -95,6 +95,6 @@ func TestGetModelUsageHealthAcceptsOnlySupportedWindows(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health?hours=2", nil))
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health?hours=721", nil))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

@@ -25,7 +25,10 @@ import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { useTheme } from '@/context/theme-provider'
 import { MODEL_ANALYTICS_CHART_OPTIONS } from '@/features/dashboard/constants'
-import { buildModelAnalyticsCharts } from '@/features/dashboard/lib/model-analytics'
+import {
+  buildModelAnalyticsCharts,
+  formatShanghaiRange,
+} from '@/features/dashboard/lib/model-analytics'
 import type {
   ModelAnalyticsChartTab,
   ModelAnalyticsData,
@@ -60,13 +63,33 @@ export function ModelCharts(props: ModelChartsProps) {
       : activeTab === 'proportion'
         ? charts.proportion
         : charts.ranking
+  const rangeText = props.analytics?.range
+    ? formatShanghaiRange(props.analytics.range)
+    : ''
+  const tabDescription =
+    activeTab === 'trend'
+      ? t('Shows call changes across the selected range')
+      : activeTab === 'proportion'
+        ? t('Shows each model share by call count')
+        : t('Ranks models by call count')
 
   return (
     <section className='overflow-hidden rounded-lg border'>
-      <header className='flex flex-wrap items-center gap-2 border-b px-4 py-3'>
-        <IconBadge tone='chart-4' size='sm'><PieChartIcon /></IconBadge>
-        <h3 className='text-sm font-semibold'>{t('Model Call Analytics')}</h3>
-        <span className='text-muted-foreground text-xs'>{t('Total:')} {props.analytics?.summary.total_calls ?? 0}</span>
+      <header className='bg-muted/20 flex flex-wrap items-center gap-3 border-b px-4 py-3'>
+        <IconBadge tone='chart-4' size='sm'>
+          <PieChartIcon />
+        </IconBadge>
+        <div className='min-w-0'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <h3 className='text-sm font-semibold'>{t('Model Call Analytics')}</h3>
+            <span className='text-muted-foreground text-xs'>
+              {t('Total:')} {props.analytics?.summary.total_calls ?? 0}
+            </span>
+          </div>
+          <p className='text-muted-foreground mt-1 truncate text-xs'>
+            {rangeText ? `${tabDescription} · ${rangeText}` : tabDescription}
+          </p>
+        </div>
         <div className='ml-auto flex flex-wrap gap-1'>
           {MODEL_ANALYTICS_CHART_OPTIONS.map((option) => (
             <Button key={option.value} type='button' size='sm' variant={activeTab === option.value ? 'default' : 'ghost'} aria-pressed={activeTab === option.value} onClick={() => setActiveTab(option.value)}>
@@ -75,7 +98,7 @@ export function ModelCharts(props: ModelChartsProps) {
           ))}
         </div>
       </header>
-      <div className='h-[320px] p-2'>
+      <div className='h-[320px] px-3 py-4'>
         {props.loading ? (
           <div className='bg-muted/40 h-full animate-pulse rounded-md' />
         ) : props.error ? (

@@ -82,7 +82,7 @@ describe('model analytics helpers', () => {
     ).toEqual(buckets.map((row) => row.bucket_start))
   })
 
-  it('adds view-only zoom for long ranges without changing totals', () => {
+  it('keeps long ranges readable without changing totals', () => {
     const buckets = Array.from({ length: 24 }, (_, index) =>
       bucket(1788192000 + index * 3600, index + 1)
     )
@@ -91,8 +91,25 @@ describe('model analytics helpers', () => {
       granularity: 'hour',
     })
 
-    expect(specs.consumption.dataZoom).toBeDefined()
+    expect('dataZoom' in specs.consumption).toBe(false)
+    expect((specs.consumption as unknown as Record<string, unknown>).xField).toBe(
+      'timeLabel'
+    )
     expect(specs.summary.totalQuota).toBe(300)
     expect(specs.summary.totalCalls).toBe(24)
+  })
+
+  it('draws consumption with display currency values while preserving raw quota', () => {
+    const specs = buildModelAnalyticsCharts([bucket(1788192000, 500000)], {
+      granularity: 'hour',
+    })
+
+    expect((specs.consumption as unknown as Record<string, unknown>).yField).toBe(
+      'quotaAmount'
+    )
+    expect(specs.consumption.data[0].values[0]).toMatchObject({
+      quota: 500000,
+      quotaAmount: 1,
+    })
   })
 })

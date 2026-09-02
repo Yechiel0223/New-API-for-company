@@ -103,9 +103,7 @@ export async function getModelAnalytics(
   return res.data.data
 }
 
-export async function getModelHealth(
-  hours: 1 | 24 | 168
-): Promise<ModelHealthData> {
+export async function getModelHealth(hours: number): Promise<ModelHealthData> {
   const res = await api.get<{
     success: boolean
     data: ModelHealthData

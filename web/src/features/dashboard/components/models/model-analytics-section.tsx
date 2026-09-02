@@ -95,7 +95,6 @@ export function ModelAnalyticsSection() {
         data={healthData}
         loading={analytics.healthQuery.isPending}
         error={analytics.healthQuery.isError}
-        onWindowChange={analytics.setHealthHours}
         onRetry={refresh}
         onModelClick={openLogs}
       />
