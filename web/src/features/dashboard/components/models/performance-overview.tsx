@@ -89,10 +89,10 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
         </div>
       ) : (
         <>
-          <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 px-4 py-3 text-xs'>
+          <div className='text-muted-foreground grid gap-x-4 gap-y-2 px-4 py-3 text-xs sm:grid-cols-[minmax(11rem,1fr)_9.5rem_5rem_5rem_6rem_minmax(9rem,auto)] sm:items-center'>
             <span
               className={cn(
-                'font-medium',
+                'font-medium tabular-nums',
                 overall?.status === 'healthy' && 'text-success',
                 overall?.status === 'warning' && 'text-warning',
                 overall?.status === 'fault' && 'text-destructive'
@@ -100,14 +100,20 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
             >
               {statusLabel}
             </span>
-            <span>
+            <span className='tabular-nums sm:text-right'>
               {t('Success')} {overall?.success_calls ?? 0}/{completed} ·{' '}
               {overall?.success_rate ?? 0}%
             </span>
-            <span>{t('Failure')} {overall?.failure_calls ?? 0}</span>
-            <span>{t('Running')} {overall?.running_calls ?? 0}</span>
-            <span>{t('Stuck')} {overall?.stuck_calls ?? 0}</span>
-            <span className='ml-auto'>
+            <span className='tabular-nums sm:text-right'>
+              {t('Failure')} {overall?.failure_calls ?? 0}
+            </span>
+            <span className='tabular-nums sm:text-right'>
+              {t('Running')} {overall?.running_calls ?? 0}
+            </span>
+            <span className='tabular-nums sm:text-right'>
+              {t('Stuck')} {overall?.stuck_calls ?? 0}
+            </span>
+            <span className='tabular-nums sm:text-right'>
               {t('Last updated:')}{' '}
               {props.data
                 ? formatShanghaiBucket(props.data.updated_at, 'hour')
@@ -119,20 +125,20 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
               <button
                 key={model.model_name}
                 type='button'
-                className='hover:bg-muted/40 grid w-full gap-1 px-4 py-3 text-left sm:grid-cols-[minmax(10rem,1fr)_auto_auto_auto] sm:items-center sm:gap-4'
+                className='hover:bg-muted/40 grid w-full gap-2 px-4 py-3 text-left sm:grid-cols-[minmax(11rem,1fr)_9.5rem_7rem_9rem] sm:items-center sm:gap-4'
                 onClick={() => props.onModelClick(model)}
                 title={model.model_name}
               >
-                <span className='font-medium'>
+                <span className='truncate font-medium'>
                   {shortModelName(model.model_name)}
                 </span>
-                <span className='text-sm'>
+                <span className='text-muted-foreground text-sm tabular-nums sm:text-right'>
                   {t('Success')} {model.success_calls}/
                   {model.success_calls + model.failure_calls} ·{' '}
                   {model.success_rate}%
                 </span>
                 <span
-                  className='text-sm'
+                  className='text-muted-foreground text-sm tabular-nums sm:text-right'
                   title={
                     model.successful_duration_samples < 20
                       ? t('Small sample, for reference only')
@@ -142,7 +148,7 @@ export function PerformanceOverview(props: PerformanceOverviewProps) {
                   P50 {formatDuration(model.p50_ms)}
                 </span>
                 <span
-                  className='text-sm'
+                  className='text-muted-foreground text-sm tabular-nums sm:text-right'
                   title={
                     model.successful_duration_samples < 20
                       ? t('Small sample, for reference only')
