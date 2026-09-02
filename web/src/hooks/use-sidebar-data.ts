@@ -17,24 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
-  Activity,
-  Box,
-  CreditCard,
   FileText,
-  FlaskConical,
   Key,
   LayoutDashboard,
   ListTodo,
-  MessageSquare,
-  PlugZap,
   Radio,
   ServerCog,
-  Settings,
-  Ticket,
   User,
   Users,
   Wallet,
 } from 'lucide-react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '@/components/layout/types'
@@ -46,36 +39,13 @@ import { ROLE } from '@/lib/roles'
  * These are shown when the URL does not match any nested sidebar view
  * registered in `layout/lib/sidebar-view-registry.ts`.
  */
-export function useSidebarData(): SidebarData {
-  const { t } = useTranslation()
-
+export function buildCompanySidebarData(t: TFunction): SidebarData {
   return {
     navGroups: [
-      {
-        id: 'chat',
-        title: t('Chat'),
-        items: [
-          {
-            title: t('Playground'),
-            url: '/playground',
-            icon: FlaskConical,
-          },
-          {
-            title: t('Chat'),
-            icon: MessageSquare,
-            type: 'chat-presets',
-          },
-        ],
-      },
       {
         id: 'general',
         title: t('General'),
         items: [
-          {
-            title: t('Overview'),
-            url: '/dashboard/overview',
-            icon: Activity,
-          },
           {
             title: t('Dashboard'),
             url: '/dashboard/models',
@@ -126,24 +96,9 @@ export function useSidebarData(): SidebarData {
             icon: Radio,
           },
           {
-            title: t('Models'),
-            url: '/models/metadata',
-            icon: Box,
-          },
-          {
             title: t('Users'),
             url: '/users',
             icon: Users,
-          },
-          {
-            title: t('Redemption Codes'),
-            url: '/redemption-codes',
-            icon: Ticket,
-          },
-          {
-            title: t('Subscriptions'),
-            url: '/subscriptions',
-            icon: CreditCard,
           },
           {
             title: t('System Info'),
@@ -151,20 +106,14 @@ export function useSidebarData(): SidebarData {
             icon: ServerCog,
             requiredRole: ROLE.SUPER_ADMIN,
           },
-          {
-            title: t('Task Plugins'),
-            url: '/task-plugins',
-            icon: PlugZap,
-            requiredRole: ROLE.SUPER_ADMIN,
-          },
-          {
-            title: t('System Settings'),
-            url: '/system-settings/site',
-            activeUrls: ['/system-settings'],
-            icon: Settings,
-          },
         ],
       },
     ],
   }
+}
+
+export function useSidebarData(): SidebarData {
+  const { t } = useTranslation()
+
+  return buildCompanySidebarData(t)
 }

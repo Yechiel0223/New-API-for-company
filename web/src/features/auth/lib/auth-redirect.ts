@@ -20,6 +20,8 @@ import type { AuthUser } from '@/stores/auth-store'
 
 const allowedRedirectProtocols = new Set(['http:', 'https:'])
 
+export const DEFAULT_AUTH_REDIRECT = '/dashboard/models'
+
 export function getSavedLanguage(user: AuthUser): string | undefined {
   if (typeof user.language === 'string') {
     return user.language

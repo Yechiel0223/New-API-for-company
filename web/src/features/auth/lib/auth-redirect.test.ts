@@ -20,11 +20,19 @@ import { describe, expect, test } from 'vitest'
 
 import type { AuthUser } from '@/stores/auth-store'
 
-import { getSavedLanguage, sanitizeAuthRedirect } from './auth-redirect'
+import {
+  DEFAULT_AUTH_REDIRECT,
+  getSavedLanguage,
+  sanitizeAuthRedirect,
+} from './auth-redirect'
 
 const origin = 'https://dashboard.example.com'
 
 describe('authentication redirect validation', () => {
+  test('uses model analytics as the company default after sign-in', () => {
+    expect(DEFAULT_AUTH_REDIRECT).toBe('/dashboard/models')
+  })
+
   test('preserves safe internal paths, search parameters, and fragments', () => {
     expect(sanitizeAuthRedirect('/console?tab=usage#recent', origin)).toBe(
       '/console?tab=usage#recent'
