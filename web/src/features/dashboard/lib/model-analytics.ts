@@ -150,11 +150,7 @@ export function buildModelAnalyticsCharts(
   const axes = [
     {
       orient: 'bottom' as const,
-      type: 'linear' as const,
-      label: {
-        formatMethod: (value: number) =>
-          formatShanghaiBucket(value, options.granularity),
-      },
+      type: 'band' as const,
     },
     { orient: 'left' as const, type: 'linear' as const },
   ]
@@ -180,7 +176,7 @@ export function buildModelAnalyticsCharts(
     consumption: {
       type: 'bar',
       data: [{ id: 'model-consumption', values }],
-      xField: 'bucketStart',
+      xField: 'timeLabel',
       yField: 'quota',
       seriesField: 'model',
       stack: true,
@@ -190,7 +186,8 @@ export function buildModelAnalyticsCharts(
       tooltip: {
         mark: {
           content: [
-            { key: t('Model'), value: (datum: ChartDatum) => datum.model },
+            { key: t('Time'), value: (datum?: ChartDatum) => datum?.timeLabel ?? '' },
+            { key: t('Model'), value: (datum?: ChartDatum) => datum?.model ?? '' },
             { key: t('Full model ID'), value: (datum?: ChartDatum) => datum?.modelId ?? '' },
             { key: t('Calls'), value: (datum?: ChartDatum) => datum?.calls ?? 0 },
             {
@@ -212,7 +209,7 @@ export function buildModelAnalyticsCharts(
     calls: {
       type: 'area',
       data: [{ id: 'model-calls', values }],
-      xField: 'bucketStart',
+      xField: 'timeLabel',
       yField: 'calls',
       seriesField: 'model',
       axes,
