@@ -290,6 +290,20 @@ func TestBuildModelHealthAppliesCurrentStateFaultAndSampleRules(t *testing.T) {
 			wantStatus: ModelHealthWarning,
 		},
 		{
+			name: "higher attempt id wins when channel attempts complete in the same second",
+			events: []model.ModelUsageEvent{
+				{EventKey: "request:canonical", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, SubmittedAt: now.Add(-10 * time.Minute).Unix(), CompletedAt: now.Add(-7 * time.Minute).Unix()},
+			},
+			attempts: []model.ModelUsageAttempt{
+				{ID: 2, EventKey: "request:newer", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusSuccess, CompletedAt: now.Add(-7 * time.Minute).Unix()},
+				{ID: 1, EventKey: "request:older", ModelName: "model-a", ChannelID: 1, Status: model.ModelUsageStatusFailure, CompletedAt: now.Add(-7 * time.Minute).Unix()},
+			},
+			abilities: []model.Ability{
+				{Model: "model-a", ChannelId: 1, Enabled: true},
+			},
+			wantStatus: ModelHealthWarning,
+		},
+		{
 			name: "P95 needs three successful duration samples",
 			events: []model.ModelUsageEvent{
 				healthEvent("request:a", "model-a", now.Add(-10*time.Minute).Unix(), model.ModelUsageStatusSuccess, 2_000),

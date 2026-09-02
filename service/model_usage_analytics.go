@@ -564,7 +564,7 @@ func modelUsageEventsHaveFault(events []model.ModelUsageEvent, attempts []model.
 			continue
 		}
 		latest, exists := latestByChannel[attempt.ChannelID]
-		if !exists || attempt.CompletedAt >= latest.CompletedAt {
+		if !exists || modelUsageAttemptIsLater(attempt, latest) {
 			latestByChannel[attempt.ChannelID] = attempt
 		}
 	}
@@ -596,7 +596,7 @@ func uniqueModelUsageAttempts(attempts []model.ModelUsageAttempt) []model.ModelU
 		if !exists {
 			order = append(order, key)
 		}
-		if !exists || attempt.CompletedAt >= previous.CompletedAt {
+		if !exists || modelUsageAttemptIsLater(attempt, previous) {
 			unique[key] = attempt
 		}
 	}
@@ -605,6 +605,13 @@ func uniqueModelUsageAttempts(attempts []model.ModelUsageAttempt) []model.ModelU
 		result = append(result, unique[key])
 	}
 	return result
+}
+
+func modelUsageAttemptIsLater(candidate model.ModelUsageAttempt, current model.ModelUsageAttempt) bool {
+	if candidate.CompletedAt != current.CompletedAt {
+		return candidate.CompletedAt > current.CompletedAt
+	}
+	return candidate.ID > current.ID
 }
 
 func enabledModelChannels(abilities []model.Ability) map[string]map[int]struct{} {

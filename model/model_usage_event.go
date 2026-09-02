@@ -214,7 +214,7 @@ func ListModelUsageAttemptsForHealth(ctx context.Context, startTimestamp int64, 
 	attempts := make([]ModelUsageAttempt, 0)
 	err := DB.WithContext(ctx).
 		Where("completed_at >= ? AND completed_at <= ?", startTimestamp, endTimestamp).
-		Order("completed_at ASC").
+		Order("completed_at ASC, id ASC").
 		Find(&attempts).Error
 	return attempts, err
 }
