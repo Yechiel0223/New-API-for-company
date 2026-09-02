@@ -68,10 +68,11 @@ go run ./scripts/model-usage-backfill.go --rollback-batch $analyticsBatch --conf
 | `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun run typecheck` | 前端 TypeScript 类型检查。最终验证通过。 |
 | `docker run --rm -v "D:/new-api/.worktrees/model-dashboard-analytics:/workspace" -w /workspace/web oven/bun:1.4.0 bun run build` | 前端生产构建。最终验证通过。 |
 | `docker build --progress=plain -t new-api-model-dashboard:local .` | 整包 Linux 生产镜像构建，包含前端 dist 与 Go 二进制。最终验证通过。 |
+| `go test ./... -count=1` | 全仓 Go 回归。除已知 Windows HTTP2 GOAWAY fixture `TestUpstreamGetBody_HTTP2RetryAfterGracefulGoAway_PassThrough` 外，其余包通过；根包 `web/dist` embed 已通过。 |
 
-完整仓库 `go test ./...` 在 Windows 主机上仍不作为唯一绿灯：基线曾包含 Windows HTTP/2 `GOAWAY` fixture 失败。整包 Docker 镜像构建已证明 Linux 生产构建链路可用。
+完整仓库 `go test ./...` 在 Windows 主机上仍不作为唯一绿灯：最终只剩 Windows HTTP/2 `GOAWAY` fixture `TestUpstreamGetBody_HTTP2RetryAfterGracefulGoAway_PassThrough` 失败，错误为本机 socket abort；该失败在实施前基线已存在。整包 Docker 镜像构建已证明 Linux 生产构建链路可用。
 
-前端测试说明：新增的纯函数测试可用 Bun runner 通过；新增组件测试需要 jsdom/Vitest worker。Docker 内 `bunx vitest ... --environment jsdom` 在本机出现 worker 启动超时，未进入断言阶段；上线门槛以 `typecheck` 和生产构建通过为准。
+前端测试说明：新增的纯函数测试可用 Bun runner 通过；新增组件测试需要 jsdom/Vitest worker。Docker 内 `bunx vitest ... --environment jsdom` 在本机出现 worker 启动超时，未进入断言阶段；`bun run lint` 在 Docker 挂载盘上超过 4 分钟无输出后中断。上线门槛以 `typecheck`、前端生产构建和整包 Docker build 通过为准。
 
 ## 验收与结果位置
 
