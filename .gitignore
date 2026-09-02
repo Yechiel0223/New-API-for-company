@@ -4,6 +4,8 @@
 .history
 upload
 *.exe
+__pycache__/
+*.pyc
 *.db
 build
 *.db-journal
