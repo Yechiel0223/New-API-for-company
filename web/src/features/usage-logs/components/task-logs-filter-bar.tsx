@@ -84,6 +84,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         ? new Date(searchParams.startTime)
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
+      ...(searchParams.userId ? { userId: String(searchParams.userId) } : {}),
       ...(searchParams.channel
         ? { channel: String(searchParams.channel) }
         : {}),
@@ -104,6 +105,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     props.logCategory,
     searchParams.startTime,
     searchParams.endTime,
+    searchParams.userId,
     searchParams.channel,
     searchParams.filter,
   ])
@@ -130,7 +132,11 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
-    const resetFilters: TaskLogsFilters = { startTime: start, endTime: end }
+    const resetFilters: TaskLogsFilters = {
+      startTime: start,
+      endTime: end,
+      ...(filters.userId ? { userId: filters.userId } : {}),
+    }
     setFilters(resetFilters)
 
     navigate({
@@ -140,10 +146,11 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         page: 1,
         startTime: start.getTime(),
         endTime: end.getTime(),
+        ...(filters.userId ? { userId: Number(filters.userId) } : {}),
       },
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
-  }, [navigate, props.logCategory, queryClient])
+  }, [filters.userId, navigate, props.logCategory, queryClient])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -164,7 +171,9 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     props.logCategory === 'drawing'
       ? t('Filter by MjProxy task ID')
       : t('Filter by task ID')
-  const hasAdditionalFilters = !!filterValue || !!filters.channel
+  const hasUserFilter = !!filters.userId
+  const hasAdditionalFilters =
+    !!filterValue || !!filters.channel || hasUserFilter
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -198,6 +207,15 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       />
     </LogsFilterField>
   ) : null
+  const userFilter = isAdmin && hasUserFilter ? (
+    <LogsFilterField>
+      <LogsFilterInput
+        aria-label={t('User ID')}
+        value={filters.userId || ''}
+        readOnly
+      />
+    </LogsFilterField>
+  ) : null
 
   return (
     <LogsFilterToolbar
@@ -205,6 +223,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       primaryFilters={
         <>
           {dateRangeFilter}
+          {userFilter}
           {taskIdFilter}
           {channelFilter}
         </>
@@ -213,10 +232,13 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       mobileFilters={
         <>
           {taskIdFilter}
+          {userFilter}
           {channelFilter}
         </>
       }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
+      mobileFilterCount={
+        [filterValue, filters.channel, filters.userId].filter(Boolean).length
+      }
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}

@@ -21,9 +21,9 @@ import i18n from 'i18next'
 
 import {
   DEFAULT_AUTH_REDIRECT,
-  getSavedLanguage,
   sanitizeAuthRedirect,
 } from '@/features/auth/lib/auth-redirect'
+import { DEFAULT_INTERFACE_LANGUAGE } from '@/i18n/languages'
 import { applyAuthBundle } from '@/lib/api'
 import type { AuthBundle } from '@/stores/auth-store'
 
@@ -43,9 +43,8 @@ export function useAuthRedirect() {
     redirectTo?: string
   ) => {
     applyAuthBundle(bundle)
-    const savedLang = getSavedLanguage(bundle.user)
-    if (savedLang && savedLang !== i18n.language) {
-      await i18n.changeLanguage(savedLang)
+    if (i18n.language !== DEFAULT_INTERFACE_LANGUAGE) {
+      await i18n.changeLanguage(DEFAULT_INTERFACE_LANGUAGE)
     }
 
     const targetPath =

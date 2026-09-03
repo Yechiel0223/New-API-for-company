@@ -16,26 +16,46 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
+import { DEFAULT_INTERFACE_LANGUAGE } from '@/i18n/languages'
 import { getCookie } from '@/lib/cookies'
+import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
+import { shouldForceExpandedSidebar } from '../lib/sidebar-policy'
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode
 }
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
-  const defaultOpen = getCookie('sidebar_state') !== 'false'
+  const { i18n } = useTranslation()
+  const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
+  const forceExpandedSidebar = shouldForceExpandedSidebar(role)
+  const defaultOpen = forceExpandedSidebar || getCookie('sidebar_state') !== 'false'
+
+  useEffect(() => {
+    if (i18n.language !== DEFAULT_INTERFACE_LANGUAGE) {
+      void i18n.changeLanguage(DEFAULT_INTERFACE_LANGUAGE)
+    }
+  }, [i18n, i18n.language])
 
   return (
     <LayoutProvider>
-      <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
+      <SidebarProvider
+        defaultOpen={defaultOpen}
+        open={forceExpandedSidebar ? true : undefined}
+        className='flex-col'
+      >
         <SkipToMain />
         <AppHeader />
         <div className='flex min-h-0 w-full flex-1'>

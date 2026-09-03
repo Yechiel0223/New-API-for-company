@@ -200,7 +200,7 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                 mono
               />
             ) : null}
-            {plugin ? (
+            {props.isRoot && plugin ? (
               <>
                 <DetailRow
                   label={t('Task Plugin')}

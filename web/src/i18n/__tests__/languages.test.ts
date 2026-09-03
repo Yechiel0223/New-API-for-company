@@ -16,21 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import assert from 'node:assert/strict'
+import { describe, test } from 'vitest'
 
-import { USAGE_LOGS_DEFAULT_SECTION } from '@/features/usage-logs/section-registry'
-import { ROLE } from '@/lib/roles'
-import { useAuthStore } from '@/stores/auth-store'
+import {
+  DEFAULT_INTERFACE_LANGUAGE,
+  normalizeInterfaceLanguage,
+} from '../languages'
 
-export const Route = createFileRoute('/_authenticated/usage-logs/')({
-  beforeLoad: () => {
-    const { auth } = useAuthStore.getState()
-    throw redirect({
-      to: '/usage-logs/$section',
-      params: {
-        section:
-          auth.user?.role === ROLE.ADMIN ? 'task' : USAGE_LOGS_DEFAULT_SECTION,
-      },
-    })
-  },
+describe('interface language defaults', () => {
+  test('defaults unknown browser languages to simplified Chinese', () => {
+    assert.equal(DEFAULT_INTERFACE_LANGUAGE, 'zhCN')
+    assert.equal(normalizeInterfaceLanguage(''), 'zhCN')
+    assert.equal(normalizeInterfaceLanguage('de'), 'zhCN')
+  })
 })

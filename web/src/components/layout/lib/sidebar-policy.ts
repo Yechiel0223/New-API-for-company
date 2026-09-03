@@ -16,21 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
-
-import { USAGE_LOGS_DEFAULT_SECTION } from '@/features/usage-logs/section-registry'
-import { ROLE } from '@/lib/roles'
-import { useAuthStore } from '@/stores/auth-store'
-
-export const Route = createFileRoute('/_authenticated/usage-logs/')({
-  beforeLoad: () => {
-    const { auth } = useAuthStore.getState()
-    throw redirect({
-      to: '/usage-logs/$section',
-      params: {
-        section:
-          auth.user?.role === ROLE.ADMIN ? 'task' : USAGE_LOGS_DEFAULT_SECTION,
-      },
-    })
-  },
-})
+export function shouldForceExpandedSidebar(role: number): boolean {
+  void role
+  return true
+}

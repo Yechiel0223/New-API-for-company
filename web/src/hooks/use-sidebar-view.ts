@@ -21,12 +21,15 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveSidebarView } from '@/components/layout/lib/sidebar-view-registry'
-import type { NavGroup, ResolvedSidebarView } from '@/components/layout/types'
+import type { ResolvedSidebarView } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { useSidebarConfig } from './use-sidebar-config'
-import { useSidebarData } from './use-sidebar-data'
+import {
+  filterCompanySidebarDataForRole,
+  useSidebarData,
+} from './use-sidebar-data'
 
 /** Sentinel key used for the root navigation in animation `key=` props */
 const ROOT_VIEW_KEY = '__root'
@@ -51,17 +54,9 @@ export function useSidebarView(): ResolvedSidebarView {
   const rootSidebarData = useSidebarData()
   const configFilteredRoot = useSidebarConfig(rootSidebarData.navGroups)
 
-  const rootNavGroups = useMemo<NavGroup[]>(() => {
+  const rootNavGroups = useMemo(() => {
     const role = userRole ?? ROLE.GUEST
-    const isAdmin = role >= ROLE.ADMIN
-    return configFilteredRoot
-      .filter((group) => (group.id === 'admin' ? isAdmin : true))
-      .map((group) => {
-        const items = group.items.filter(
-          (item) => item.requiredRole === undefined || role >= item.requiredRole
-        )
-        return items.length === group.items.length ? group : { ...group, items }
-      })
+    return filterCompanySidebarDataForRole(configFilteredRoot, role)
   }, [configFilteredRoot, userRole])
 
   const view = resolveSidebarView(pathname)

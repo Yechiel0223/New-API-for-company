@@ -16,21 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { expect, test } from 'vitest'
 
-import { USAGE_LOGS_DEFAULT_SECTION } from '@/features/usage-logs/section-registry'
-import { ROLE } from '@/lib/roles'
-import { useAuthStore } from '@/stores/auth-store'
+import { buildBaseParams } from '../utils'
 
-export const Route = createFileRoute('/_authenticated/usage-logs/')({
-  beforeLoad: () => {
-    const { auth } = useAuthStore.getState()
-    throw redirect({
-      to: '/usage-logs/$section',
-      params: {
-        section:
-          auth.user?.role === ROLE.ADMIN ? 'task' : USAGE_LOGS_DEFAULT_SECTION,
-      },
-    })
-  },
+test('task log base params pass userId through as user_id for admin user drilldown', () => {
+  const params = buildBaseParams({
+    page: 2,
+    pageSize: 50,
+    searchParams: {
+      userId: 5,
+      startTime: 1788364800000,
+      endTime: 1788451199000,
+    },
+  })
+
+  expect(params).toEqual({
+    p: 2,
+    page_size: 50,
+    user_id: '5',
+    start_timestamp: 1788364800,
+    end_timestamp: 1788451199,
+  })
 })

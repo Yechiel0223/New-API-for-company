@@ -31,6 +31,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestamp } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   USER_STATUS,
@@ -44,7 +46,9 @@ import { UserQuotaCell } from './user-quota-cell'
 
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
-  return [
+  const currentRole = useAuthStore((s) => s.auth.user?.role ?? ROLE.GUEST)
+  const simplifiedAdminView = currentRole === ROLE.ADMIN
+  const columns: ColumnDef<User>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -57,12 +61,14 @@ export function useUsersColumns(): ColumnDef<User>[] {
         />
       ),
       cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label='Select row'
-          className='translate-y-[2px]'
-        />
+        <div onClick={(event) => event.stopPropagation()}>
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label='Select row'
+            className='translate-y-[2px]'
+          />
+        </div>
       ),
       enableSorting: false,
       enableHiding: false,
@@ -192,107 +198,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileOrder: 30 },
     },
     {
-      accessorKey: 'role',
-      header: t('Role'),
-      cell: ({ row }) => {
-        const roleValue = row.getValue('role') as number
-        const roleConfig = USER_ROLES[roleValue as keyof typeof USER_ROLES]
-
-        if (!roleConfig) {
-          return null
-        }
-
-        return (
-          <div className='flex items-center gap-x-2'>
-            {roleConfig.icon && (
-              <roleConfig.icon size={16} className='text-muted-foreground' />
-            )}
-            <span className='text-sm'>{t(roleConfig.labelKey)}</span>
-          </div>
-        )
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(String(row.getValue(id)))
-      },
-      enableSorting: false,
-      size: 120,
-      meta: { mobileOrder: 20 },
-    },
-    {
-      id: 'invite_info',
-      header: t('Invite Info'),
-      cell: ({ row }) => {
-        const user = row.original
-        const affCount = user.aff_count || 0
-        const affHistoryQuota = user.aff_history_quota || 0
-        const inviterId = user.inviter_id || 0
-
-        return (
-          <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <StatusBadge
-                    label={`${t('Invited')}: ${affCount}`}
-                    variant='neutral'
-                    copyable={false}
-                    className='cursor-help'
-                  />
-                }
-              />
-              <TooltipContent>
-                <p className='text-xs'>{t('Number of users invited')}</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <StatusBadge
-                    label={`${t('Revenue')}: ${formatQuota(affHistoryQuota)}`}
-                    variant='neutral'
-                    copyable={false}
-                    className='cursor-help'
-                  />
-                }
-              />
-              <TooltipContent>
-                <p className='text-xs'>{t('Total invitation revenue')}</p>
-              </TooltipContent>
-            </Tooltip>
-            {inviterId > 0 && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={`${t('Inviter')}: ${inviterId}`}
-                      variant='neutral'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p className='text-xs'>
-                    {t('Invited by user ID')} {inviterId}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {inviterId === 0 && (
-              <StatusBadge
-                label={t('No Inviter')}
-                variant='neutral'
-                copyable={false}
-              />
-            )}
-          </div>
-        )
-      },
-      size: 240,
-      enableSorting: false,
-      meta: { mobileHidden: true },
-    },
-    {
       accessorKey: 'created_at',
       header: t('Created At'),
       cell: ({ row }) => {
@@ -327,4 +232,114 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { pinned: 'right' as const },
     },
   ]
+
+  if (!simplifiedAdminView) {
+    columns.splice(
+      6,
+      0,
+      {
+        accessorKey: 'role',
+        header: t('Role'),
+        cell: ({ row }) => {
+          const roleValue = row.getValue('role') as number
+          const roleConfig = USER_ROLES[roleValue as keyof typeof USER_ROLES]
+
+          if (!roleConfig) {
+            return null
+          }
+
+          return (
+            <div className='flex items-center gap-x-2'>
+              {roleConfig.icon && (
+                <roleConfig.icon size={16} className='text-muted-foreground' />
+              )}
+              <span className='text-sm'>{t(roleConfig.labelKey)}</span>
+            </div>
+          )
+        },
+        filterFn: (row, id, value) => {
+          return value.includes(String(row.getValue(id)))
+        },
+        enableSorting: false,
+        size: 120,
+        meta: { mobileOrder: 20 },
+      },
+      {
+        id: 'invite_info',
+        header: t('Invite Info'),
+        cell: ({ row }) => {
+          const user = row.original
+          const affCount = user.aff_count || 0
+          const affHistoryQuota = user.aff_history_quota || 0
+          const inviterId = user.inviter_id || 0
+
+          return (
+            <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <StatusBadge
+                      label={`${t('Invited')}: ${affCount}`}
+                      variant='neutral'
+                      copyable={false}
+                      className='cursor-help'
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p className='text-xs'>{t('Number of users invited')}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <StatusBadge
+                      label={`${t('Revenue')}: ${formatQuota(affHistoryQuota)}`}
+                      variant='neutral'
+                      copyable={false}
+                      className='cursor-help'
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p className='text-xs'>{t('Total invitation revenue')}</p>
+                </TooltipContent>
+              </Tooltip>
+              {inviterId > 0 && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <StatusBadge
+                        label={`${t('Inviter')}: ${inviterId}`}
+                        variant='neutral'
+                        copyable={false}
+                        className='cursor-help'
+                      />
+                    }
+                  />
+                  <TooltipContent>
+                    <p className='text-xs'>
+                      {t('Invited by user ID')} {inviterId}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {inviterId === 0 && (
+                <StatusBadge
+                  label={t('No Inviter')}
+                  variant='neutral'
+                  copyable={false}
+                />
+              )}
+            </div>
+          )
+        },
+        size: 240,
+        enableSorting: false,
+        meta: { mobileHidden: true },
+      }
+    )
+  }
+
+  return columns
 }

@@ -22,8 +22,11 @@ import z from 'zod'
 import { UsageLogs } from '@/features/usage-logs'
 import {
   isUsageLogsSectionId,
+  resolveUsageLogsSectionForRole,
   USAGE_LOGS_DEFAULT_SECTION,
 } from '@/features/usage-logs/section-registry'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 const logTypeValues = ['0', '1', '2', '3', '4', '5', '6', '7'] as const
 const logTypeSearchSchema = z
@@ -43,6 +46,7 @@ const usageLogsSearchSchema = z.object({
   channel: z.string().optional().catch(''),
   group: z.string().optional().catch(''),
   username: z.string().optional().catch(''),
+  userId: z.coerce.number().optional().catch(undefined),
   requestId: z.string().optional().catch(''),
   upstreamRequestId: z.string().optional().catch(''),
   startTime: z.number().optional(),
@@ -51,10 +55,21 @@ const usageLogsSearchSchema = z.object({
 
 export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
   beforeLoad: ({ params, search }) => {
+    const { auth } = useAuthStore.getState()
+    const role = auth.user?.role ?? ROLE.GUEST
     if (!isUsageLogsSectionId(params.section)) {
       throw redirect({
         to: '/usage-logs/$section',
         params: { section: USAGE_LOGS_DEFAULT_SECTION },
+      })
+    }
+    const resolvedSection = resolveUsageLogsSectionForRole(params.section, role)
+    if (resolvedSection !== params.section) {
+      throw redirect({
+        to: '/usage-logs/$section',
+        params: { section: resolvedSection },
+        search,
+        replace: true,
       })
     }
     // type 仅 common 使用，非 common 时清掉 URL 里的 type

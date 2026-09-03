@@ -47,6 +47,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
 import {
@@ -68,6 +70,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const user = row.original
   const { setOpen, setCurrentRow, triggerRefresh } = useUsers()
+  const currentRole = useAuthStore((s) => s.auth.user?.role ?? ROLE.GUEST)
   const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
@@ -134,13 +137,17 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
   const isRoot = user.role === USER_ROLE.ROOT
+  const simplifiedAdminView = currentRole === ROLE.ADMIN
 
   if (isUserDeleted(user)) {
     return null
   }
 
   return (
-    <div className='-ml-1.5 flex items-center gap-1'>
+    <div
+      className='-ml-1.5 flex items-center gap-1'
+      onClick={(e) => e.stopPropagation()}
+    >
       <Tooltip>
         <TooltipTrigger
           render={
@@ -159,7 +166,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
       <DataTableRowActionMenu
         ariaLabel={t('Open menu')}
-        contentClassName='w-48'
+        contentClassName={simplifiedAdminView ? 'w-32' : 'w-48'}
       >
         {isDisabled ? (
           <DropdownMenuItem onClick={() => handleManage('enable')}>
@@ -180,77 +187,81 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
         )}
 
-        {isAdmin && !isRoot && (
-          <DropdownMenuItem onClick={() => handleManage('demote')}>
-            {t('Demote')}
-            <DropdownMenuShortcut>
-              <ArrowDown size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
+        {!simplifiedAdminView && (
+          <>
+            {isAdmin && !isRoot && (
+              <DropdownMenuItem onClick={() => handleManage('demote')}>
+                {t('Demote')}
+                <DropdownMenuShortcut>
+                  <ArrowDown size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+
+            {!isAdmin && (
+              <DropdownMenuItem onClick={() => handleManage('promote')}>
+                {t('Promote')}
+                <DropdownMenuShortcut>
+                  <ArrowUp size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setBindingDialogOpen(true)
+              }}
+            >
+              {t('Manage Bindings')}
+              <DropdownMenuShortcut>
+                <Link2 size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setSubscriptionsDialogOpen(true)
+              }}
+            >
+              {t('Manage Subscriptions')}
+              <DropdownMenuShortcut>
+                <CreditCard size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setResetPasskeyOpen(true)
+              }}
+              disabled={isRoot}
+            >
+              {t('Reset Passkey')}
+              <DropdownMenuShortcut>
+                <KeyRound size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setResetTwoFAOpen(true)
+              }}
+              disabled={isRoot}
+            >
+              {t('Reset 2FA')}
+              <DropdownMenuShortcut>
+                <ShieldAlert size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+          </>
         )}
-
-        {!isAdmin && (
-          <DropdownMenuItem onClick={() => handleManage('promote')}>
-            {t('Promote')}
-            <DropdownMenuShortcut>
-              <ArrowUp size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setBindingDialogOpen(true)
-          }}
-        >
-          {t('Manage Bindings')}
-          <DropdownMenuShortcut>
-            <Link2 size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setSubscriptionsDialogOpen(true)
-          }}
-        >
-          {t('Manage Subscriptions')}
-          <DropdownMenuShortcut>
-            <CreditCard size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setResetPasskeyOpen(true)
-          }}
-          disabled={isRoot}
-        >
-          {t('Reset Passkey')}
-          <DropdownMenuShortcut>
-            <KeyRound size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setResetTwoFAOpen(true)
-          }}
-          disabled={isRoot}
-        >
-          {t('Reset 2FA')}
-          <DropdownMenuShortcut>
-            <ShieldAlert size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
 
         <DropdownMenuItem
           onClick={handleDelete}

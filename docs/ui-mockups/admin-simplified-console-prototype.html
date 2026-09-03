@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智颖API监控｜普通管理员精简后台原型</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --panel-soft: #f9fbff;
+      --text: #111827;
+      --muted: #6b7280;
+      --faint: #9ca3af;
+      --line: #e5e7eb;
+      --line-soft: #eef2f7;
+      --primary: #3ba4f6;
+      --primary-dark: #168de8;
+      --primary-soft: #eaf6ff;
+      --green: #10b981;
+      --green-soft: #e9fbf5;
+      --orange: #f59e0b;
+      --orange-soft: #fff7e6;
+      --red: #ef4444;
+      --red-soft: #fff1f2;
+      --purple: #a855f7;
+      --purple-soft: #f7ecff;
+      --shadow: 0 14px 40px rgba(15, 23, 42, .06);
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(59, 164, 246, .12), transparent 32rem),
+        linear-gradient(180deg, #fbfdff 0%, var(--bg) 34%, #f6f8fb 100%);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: rgba(255, 255, 255, .78);
+      backdrop-filter: blur(18px);
+      border-right: 1px solid var(--line);
+      padding: 24px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 8px 28px;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 800;
+      letter-spacing: -.04em;
+      background: linear-gradient(135deg, #18b6ff 0%, #7c4dff 100%);
+      box-shadow: 0 10px 22px rgba(59, 164, 246, .28);
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: -.02em;
+    }
+
+    .nav-label {
+      color: var(--faint);
+      font-size: 12px;
+      padding: 16px 12px 8px;
+    }
+
+    .nav-item {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: #374151;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      border-radius: 14px;
+      margin-bottom: 6px;
+      text-align: left;
+      transition: .18s ease;
+    }
+
+    .nav-item:hover {
+      background: #f0f6ff;
+      color: var(--primary-dark);
+    }
+
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: #0576cf;
+      font-weight: 650;
+    }
+
+    .nav-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(59, 164, 246, .12);
+      font-size: 13px;
+    }
+
+    .sidebar-note {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 20px;
+      border: 1px solid var(--line-soft);
+      background: linear-gradient(180deg, #fff, #f8fbff);
+      border-radius: 18px;
+      padding: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 22px 28px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .title-block h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      letter-spacing: -.04em;
+    }
+
+    .title-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .admin-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px 8px 8px;
+      box-shadow: 0 8px 26px rgba(15, 23, 42, .04);
+      color: #374151;
+      white-space: nowrap;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 750;
+    }
+
+    .page-tabs {
+      display: inline-flex;
+      gap: 4px;
+      background: #eef3f9;
+      border-radius: 999px;
+      padding: 4px;
+      margin-bottom: 16px;
+    }
+
+    .page-tab {
+      border: 0;
+      background: transparent;
+      color: #4b5563;
+      padding: 9px 18px;
+      border-radius: 999px;
+    }
+
+    .page-tab.active {
+      color: #fff;
+      background: var(--primary);
+      box-shadow: 0 8px 18px rgba(59, 164, 246, .28);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+
+    .panel-head {
+      min-height: 64px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .panel-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--primary-dark);
+      background: var(--primary-soft);
+    }
+
+    .toolbar {
+      padding: 20px 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .segmented {
+      display: inline-flex;
+      background: #f1f5f9;
+      border-radius: 999px;
+      padding: 4px;
+      gap: 2px;
+    }
+
+    .segmented button {
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      padding: 8px 14px;
+      color: #374151;
+    }
+
+    .segmented button.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 7px 18px rgba(59, 164, 246, .25);
+    }
+
+    .ghost-btn, .primary-btn, .danger-btn {
+      border-radius: 12px;
+      padding: 9px 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #374151;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .primary-btn {
+      border-color: transparent;
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .danger-btn {
+      border-color: #fecaca;
+      background: var(--red-soft);
+      color: #dc2626;
+    }
+
+    .range-caption {
+      padding: 0 24px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric {
+      padding: 20px 24px;
+      min-height: 116px;
+      border-right: 1px solid var(--line);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric-label {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    .metric-label .dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      font-weight: 750;
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -.04em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .health-summary {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      padding: 18px 24px;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      color: #4b5563;
+    }
+
+    .summary-item {
+      text-align: left;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-value {
+      font-size: 15px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .health-row {
+      display: grid;
+      grid-template-columns: 2fr 1.1fr 1fr 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 17px 24px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .health-row:last-child {
+      border-bottom: 0;
+    }
+
+    .model-name {
+      font-size: 17px;
+      font-weight: 650;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .chart-body {
+      padding: 24px 24px 18px;
+    }
+
+    .chart {
+      height: 260px;
+      position: relative;
+      border-left: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      margin: 14px 10px 22px 42px;
+      background: repeating-linear-gradient(to top, transparent 0, transparent 51px, #edf1f6 52px);
+    }
+
+    .bar {
+      position: absolute;
+      bottom: 0;
+      width: 42px;
+      border-radius: 10px 10px 0 0;
+      background: linear-gradient(180deg, #31b9f4, #1d8ef0);
+    }
+
+    .bar.orange {
+      background: linear-gradient(180deg, #ffb547, #f59e0b);
+    }
+
+    .bar.purple {
+      background: linear-gradient(180deg, #c084fc, #9333ea);
+    }
+
+    .axis-label {
+      position: absolute;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      background: #1d8ef0;
+    }
+
+    .swatch.orange {
+      background: #f59e0b;
+    }
+
+    .swatch.purple {
+      background: #9333ea;
+    }
+
+    .user-tools {
+      display: grid;
+      grid-template-columns: minmax(240px, 360px) auto auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .search {
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 0 14px;
+      outline: none;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 960px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 15px 18px;
+      border-bottom: 1px solid var(--line-soft);
+      vertical-align: middle;
+      font-size: 14px;
+    }
+
+    th {
+      color: #64748b;
+      background: #fbfcfe;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      transition: .15s ease;
+    }
+
+    tbody tr:hover {
+      background: #f8fbff;
+    }
+
+    .clickable-row {
+      cursor: pointer;
+    }
+
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 180px;
+    }
+
+    .mini-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 750;
+      background: linear-gradient(135deg, #3ba4f6, #7c3aed);
+      flex: none;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #059669;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .status.disabled {
+      background: var(--red-soft);
+      color: #dc2626;
+    }
+
+    .quota {
+      min-width: 150px;
+    }
+
+    .quota-bar {
+      height: 7px;
+      background: #e8f0f8;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 7px;
+    }
+
+    .quota-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #13c2c2, #52c41a);
+    }
+
+    .menu-cell {
+      position: relative;
+      width: 112px;
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fff;
+      display: inline-grid;
+      place-items: center;
+      color: #4b5563;
+    }
+
+    .row-menu {
+      position: absolute;
+      right: 16px;
+      top: 44px;
+      width: 128px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, .16);
+      padding: 6px;
+      display: none;
+      z-index: 20;
+    }
+
+    .row-menu.show {
+      display: block;
+    }
+
+    .row-menu button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 11px;
+      border-radius: 10px;
+      color: #374151;
+      text-align: left;
+    }
+
+    .row-menu button:hover {
+      background: #f3f6fb;
+    }
+
+    .row-menu button.delete {
+      color: #dc2626;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 14px;
+      margin: 2px 0 18px;
+    }
+
+    .breadcrumb button {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: var(--primary-dark);
+    }
+
+    .filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: #0576cf;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .artifact {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: #374151;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .drawer-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, .28);
+      opacity: 0;
+      visibility: hidden;
+      transition: .18s ease;
+      z-index: 50;
+    }
+
+    .drawer-mask.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(460px, 100%);
+      height: 100vh;
+      background: #fff;
+      box-shadow: -20px 0 70px rgba(15, 23, 42, .18);
+      transform: translateX(100%);
+      transition: .22s ease;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drawer.show {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      padding: 22px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .drawer-head h2 {
+      margin: 0 0 6px;
+      font-size: 20px;
+    }
+
+    .drawer-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .form {
+      padding: 22px 24px;
+      overflow: auto;
+      flex: 1;
+    }
+
+    .field {
+      margin-bottom: 17px;
+    }
+
+    .field label {
+      display: block;
+      font-weight: 650;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      padding: 10px 12px;
+      outline: none;
+      background: #fff;
+    }
+
+    .field textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .drawer-foot {
+      padding: 16px 24px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 980px) {
+      .app-shell {
+        grid-template-columns: 86px minmax(0, 1fr);
+      }
+
+      .brand-name, .nav-text, .sidebar-note {
+        display: none;
+      }
+
+      .brand {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .nav-item {
+        justify-content: center;
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metric {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .health-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .app-shell {
+        display: block;
+      }
+
+      .sidebar {
+        height: auto;
+        position: static;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .brand {
+        padding: 0;
+      }
+
+      .nav-label {
+        display: none;
+      }
+
+      .nav-item {
+        width: auto;
+        margin: 0;
+      }
+
+      .main {
+        padding: 18px 14px 32px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .admin-chip span:not(.avatar) {
+        display: none;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metric {
+        border-right: 0;
+      }
+
+      .health-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .user-tools {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="普通管理员侧边栏">
+      <div class="brand">
+        <div class="brand-mark">智</div>
+        <div class="brand-name">智颖API监控</div>
+      </div>
+
+      <div class="nav-label">管理后台</div>
+      <button class="nav-item active" data-nav="dashboard" type="button">
+        <span class="nav-icon">⌁</span>
+        <span class="nav-text">数据看板</span>
+      </button>
+      <button class="nav-item" data-nav="users" type="button">
+        <span class="nav-icon">👥</span>
+        <span class="nav-text">用户管理</span>
+      </button>
+
+      <div class="sidebar-note">
+        普通管理员视图：只保留数据看板和用户管理。Root 完整后台不受影响。
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title-block">
+          <h1 id="pageTitle">数据看板</h1>
+          <p id="pageSubtitle">查看模型调用、消耗、Token 与性能健康情况。</p>
+        </div>
+        <div class="admin-chip">
+          <span class="avatar">管</span>
+          <span>普通管理员</span>
+        </div>
+      </div>
+
+      <div class="page-tabs" role="tablist" aria-label="页面切换">
+        <button class="page-tab active" data-tab="dashboard" type="button">数据看板</button>
+        <button class="page-tab" data-tab="users" type="button">用户管理</button>
+      </div>
+
+      <section id="dashboardView">
+        <div class="panel">
+          <div class="toolbar">
+            <div class="segmented" aria-label="时间范围">
+              <button type="button">今天</button>
+              <button type="button">24 小时</button>
+              <button class="active" type="button">7 天</button>
+              <button type="button">30 天</button>
+            </div>
+            <div>
+              <button class="ghost-btn" type="button">⌕ 自定义</button>
+              <button class="ghost-btn" type="button">↻ 刷新</button>
+            </div>
+          </div>
+          <div class="range-caption">当前范围：2026-08-27 10:00 — 2026-09-03 10:00 · 小时</div>
+
+          <div class="metric-grid">
+            <div class="metric">
+              <div class="metric-label"><span class="dot" style="background:#e8f5ff;color:#0284c7">#</span>总调用</div>
+              <div class="metric-value">45</div>
+              <div class="metric-sub">成功 20 · 失败 25 · 运行中 0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label"><span class="dot" style="background:#e9fbf5;color:#059669">∞</span>总消耗</div>
+              <div class="metric-value">¥260.81</div>
+              <div class="metric-sub">所选范围</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label"><span class="dot" style="background:#f7ecff;color:#9333ea">▱</span>总 Token</div>
+              <div class="metric-value">4,335,211</div>
+              <div class="metric-sub">所选范围</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label"><span class="dot" style="background:#e6fbff;color:#0891b2">↗</span>当前 RPM</div>
+              <div class="metric-value">0</div>
+              <div class="metric-sub">最近 5 分钟</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label"><span class="dot" style="background:#fff7e6;color:#d97706">⌁</span>当前 TPM</div>
+              <div class="metric-value">0</div>
+              <div class="metric-sub">最近 5 分钟</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><span class="panel-icon">✓</span>性能健康</div>
+              <div class="muted" style="font-size:13px;margin-top:6px;">跟随页面所选时间范围 · 168h</div>
+            </div>
+            <div class="muted" style="font-size:13px;">上次更新时间：09-03 10:00</div>
+          </div>
+          <div class="health-summary">
+            <div class="summary-item"><div class="summary-label">无调用</div><div class="summary-value">0</div></div>
+            <div class="summary-item"><div class="summary-label">成功</div><div class="summary-value">20/45 · 44.44%</div></div>
+            <div class="summary-item"><div class="summary-label">失败</div><div class="summary-value">25</div></div>
+            <div class="summary-item"><div class="summary-label">运行中</div><div class="summary-value">0</div></div>
+            <div class="summary-item"><div class="summary-label">疑似卡住</div><div class="summary-value">0</div></div>
+            <div class="summary-item"><div class="summary-label">整体 P95</div><div class="summary-value">9m43s</div></div>
+          </div>
+          <div class="health-row">
+            <div class="model-name">Seedance 2.0</div>
+            <div>成功 1/1 · 100%</div>
+            <div>P50 3m31s</div>
+            <div>P95 Sample shortage</div>
+          </div>
+          <div class="health-row">
+            <div class="model-name">Seedance 2.5</div>
+            <div>成功 15/39 · 38.46%</div>
+            <div>P50 2m37s</div>
+            <div>P95 9m43s</div>
+          </div>
+          <div class="health-row">
+            <div class="model-name">Seedream 5.0 Pro</div>
+            <div>成功 4/5 · 80%</div>
+            <div>P50 1m19s</div>
+            <div>P95 1m33s</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title"><span class="panel-icon" style="background:#e9fbf5;color:#059669">¥</span>消耗趋势 <span class="muted" style="font-weight:400;">总计：¥260.81</span></div>
+            <div class="segmented"><button class="active" type="button">柱状图</button><button type="button">面积图</button></div>
+          </div>
+          <div class="chart-body">
+            <div class="chart" aria-label="消耗趋势图，纵坐标为人民币金额">
+              <span class="axis-label" style="left:-38px;top:0">¥120</span>
+              <span class="axis-label" style="left:-30px;top:78px">¥80</span>
+              <span class="axis-label" style="left:-30px;top:156px">¥40</span>
+              <span class="axis-label" style="left:-20px;bottom:-2px">¥0</span>
+              <span class="axis-label" style="left:7%;bottom:-26px">08-28</span>
+              <span class="axis-label" style="left:28%;bottom:-26px">08-30</span>
+              <span class="axis-label" style="left:51%;bottom:-26px">09-01</span>
+              <span class="axis-label" style="right:3%;bottom:-26px">09-03</span>
+              <div class="bar" style="left:50%;height:40px"></div>
+              <div class="bar orange" style="left:55%;height:210px"></div>
+              <div class="bar purple" style="left:63%;height:86px"></div>
+              <div class="bar" style="left:70%;height:132px"></div>
+            </div>
+            <div class="legend">
+              <span><i class="swatch"></i>Seedance 2.0</span>
+              <span><i class="swatch purple"></i>Seedance 2.5</span>
+              <span><i class="swatch orange"></i>Seedream 5.0 Pro</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="usersView" class="hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><span class="panel-icon">👥</span>用户管理</div>
+              <div class="muted" style="font-size:13px;margin-top:6px;">展示所有账号；隐藏角色、邀请信息和第三方绑定信息。</div>
+            </div>
+            <button class="primary-btn" type="button">＋ 添加用户</button>
+          </div>
+
+          <div class="toolbar">
+            <div class="user-tools">
+              <input class="search" id="userSearch" placeholder="按用户名、姓名或邮箱筛选..." />
+              <button class="ghost-btn" type="button">状态</button>
+              <button class="ghost-btn" type="button">查看</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="普通管理员用户管理列表">
+              <thead>
+                <tr>
+                  <th style="width:52px;">ID</th>
+                  <th>用户名称</th>
+                  <th>状态</th>
+                  <th>额度</th>
+                  <th>分组</th>
+                  <th>创建时间</th>
+                  <th>最后登录</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasksView" class="hidden">
+        <div class="breadcrumb">
+          <button type="button" id="backToUsers">用户管理</button>
+          <span>/</span>
+          <span id="taskUserName">用户任务日志</span>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><span class="panel-icon">☷</span>任务日志</div>
+              <div class="muted" style="font-size:13px;margin-top:6px;">从用户管理进入后，自动按该用户筛选；此页面不展示“插件”字段。</div>
+            </div>
+            <span class="filter-pill" id="taskFilterPill">已筛选用户</span>
+          </div>
+
+          <div class="toolbar">
+            <input class="search" style="max-width:460px;width:100%;" value="2026-09-03 00:00:00 - 2026-09-03 23:59:59" />
+            <div>
+              <button class="ghost-btn" type="button">重置</button>
+              <button class="primary-btn" type="button">搜索</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="筛选后的用户任务日志">
+              <thead>
+                <tr>
+                  <th>提交时间</th>
+                  <th>渠道</th>
+                  <th>用户</th>
+                  <th>任务 ID</th>
+                  <th>耗时</th>
+                  <th>状态</th>
+                  <th>进度</th>
+                  <th>制品</th>
+                  <th>详情</th>
+                </tr>
+              </thead>
+              <tbody id="taskRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-mask" id="drawerMask"></div>
+  <aside class="drawer" id="userDrawer" aria-label="更新用户">
+    <div class="drawer-head">
+      <div>
+        <h2>更新用户</h2>
+        <p>普通管理员版本：不展示第三方绑定信息。</p>
+      </div>
+      <button class="icon-btn" id="closeDrawer" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="form">
+      <div class="field">
+        <label>用户名</label>
+        <input id="drawerUsername" value="city-test" />
+      </div>
+      <div class="field">
+        <label>显示名称</label>
+        <input id="drawerDisplay" value="city-test" />
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input placeholder="留空以保持不变" type="password" />
+      </div>
+      <div class="field">
+        <label>分组</label>
+        <select>
+          <option>default</option>
+          <option>video-team</option>
+          <option>design-team</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>剩余额度（CNY）</label>
+        <input value="164.39" />
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <textarea placeholder="管理员备注，仅管理员可见"></textarea>
+      </div>
+    </div>
+    <div class="drawer-foot">
+      <button class="ghost-btn" id="cancelDrawer" type="button">取消</button>
+      <button class="primary-btn" type="button">保存更改</button>
+    </div>
+  </aside>
+
+  <script>
+    const users = [
+      { id: 5, name: "city-test", sub: "C端测试账号", status: "启用中", disabled: false, quota: "¥164.39", total: "¥200", percent: 82, group: "default", created: "2026-09-02 15:36:20", login: "2026-09-03 12:21:13", initial: "C" },
+      { id: 4, name: "poc-comp-b", sub: "POC 测试员工 B", status: "启用中", disabled: false, quota: "¥78.71", total: "¥100", percent: 79, group: "default", created: "2026-09-01 01:18:50", login: "2026-09-01 01:18:50", initial: "B" },
+      { id: 3, name: "poc-comp-a-708606", sub: "POC 测试员工 A", status: "启用中", disabled: false, quota: "¥63.46", total: "¥100", percent: 63, group: "default", created: "2026-09-01 01:18:39", login: "2026-09-01 01:18:39", initial: "A" },
+      { id: 2, name: "test-1", sub: "测试管理员", status: "启用中", disabled: false, quota: "¥268.06", total: "¥300", percent: 89, group: "default", created: "2026-09-01 00:45:26", login: "2026-09-03 10:45:26", initial: "T" },
+      { id: 1, name: "zhiying", sub: "Root User", status: "启用中", disabled: false, quota: "¥999,869.26", total: "¥1,000,091.31", percent: 99, group: "default", created: "2026-08-31 15:18:54", login: "2026-09-03 12:04:41", initial: "Z" }
+    ];
+
+    const taskMap = {
+      "city-test": [
+        ["2026-09-03 10:39:17", "#1", "city-test", "task_SR8MTlZlrcTeq...", "173.0s", "成功", "100%", "制品"],
+        ["2026-09-03 10:42:00", "#1", "city-test", "task_B3wA8SnK75u0C...", "228.0s", "成功", "100%", "制品"]
+      ],
+      "poc-comp-b": [
+        ["2026-09-03 10:39:17", "#1", "poc-comp-b", "task_Q9B5Sh971kIoY...", "303.0s", "成功", "100%", "制品"]
+      ],
+      "poc-comp-a-708606": [
+        ["2026-09-03 10:39:17", "#1", "poc-comp-a-708606", "task_fHk11409aJ8kO...", "200.0s", "成功", "100%", "制品"]
+      ],
+      "test-1": [
+        ["2026-09-03 10:39:17", "#1", "test-1", "task_f4bcifK4EqNNL...", "258.0s", "成功", "100%", "制品"],
+        ["2026-09-03 10:39:17", "#1", "test-1", "task_Q9B5Sh971kIoY...", "303.0s", "成功", "100%", "制品"]
+      ],
+      "zhiying": [
+        ["2026-09-03 10:08:51", "#1", "zhiying", "task_6dnXR7FKA3pnL...", "150.0s", "成功", "100%", "制品"],
+        ["2026-09-03 10:08:50", "#1", "zhiying", "task_5IoxW5jvMnqfe...", "225.0s", "成功", "100%", "制品"]
+      ]
+    };
+
+    const navButtons = document.querySelectorAll("[data-nav]");
+    const tabButtons = document.querySelectorAll("[data-tab]");
+    const dashboardView = document.getElementById("dashboardView");
+    const usersView = document.getElementById("usersView");
+    const tasksView = document.getElementById("tasksView");
+    const pageTitle = document.getElementById("pageTitle");
+    const pageSubtitle = document.getElementById("pageSubtitle");
+    const userRows = document.getElementById("userRows");
+    const taskRows = document.getElementById("taskRows");
+    const taskUserName = document.getElementById("taskUserName");
+    const taskFilterPill = document.getElementById("taskFilterPill");
+    const drawer = document.getElementById("userDrawer");
+    const drawerMask = document.getElementById("drawerMask");
+    const drawerUsername = document.getElementById("drawerUsername");
+    const drawerDisplay = document.getElementById("drawerDisplay");
+
+    function setChrome(active) {
+      navButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.nav === active));
+      tabButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === active));
+      if (active === "dashboard") {
+        pageTitle.textContent = "数据看板";
+        pageSubtitle.textContent = "查看模型调用、消耗、Token 与性能健康情况。";
+      } else if (active === "users") {
+        pageTitle.textContent = "用户管理";
+        pageSubtitle.textContent = "管理所有账号，点击用户可查看该用户的任务日志。";
+      } else {
+        pageTitle.textContent = "任务日志";
+        pageSubtitle.textContent = "已按用户筛选，仅展示当前用户相关任务。";
+      }
+    }
+
+    function showView(view) {
+      dashboardView.classList.toggle("hidden", view !== "dashboard");
+      usersView.classList.toggle("hidden", view !== "users");
+      tasksView.classList.toggle("hidden", view !== "tasks");
+      setChrome(view === "tasks" ? "users" : view);
+    }
+
+    function renderUsers(list = users) {
+      userRows.innerHTML = list.map(user => `
+        <tr class="clickable-row" data-user="${user.name}">
+          <td>${user.id}</td>
+          <td>
+            <div class="user-cell">
+              <span class="mini-avatar">${user.initial}</span>
+              <span><strong>${user.name}</strong><br><span class="muted">${user.sub}</span></span>
+            </div>
+          </td>
+          <td><span class="status${user.disabled ? " disabled" : ""}">${user.disabled ? "已禁用" : user.status}</span></td>
+          <td>
+            <div class="quota">
+              <strong>${user.quota}</strong> <span class="muted">/ ${user.total}</span>
+              <div class="quota-bar"><div class="quota-fill" style="width:${user.percent}%"></div></div>
+            </div>
+          </td>
+          <td><span style="color:#0576cf;font-weight:650">${user.group}</span></td>
+          <td>${user.created}</td>
+          <td>${user.login}</td>
+          <td class="menu-cell">
+            <button class="icon-btn edit-action" type="button" aria-label="编辑用户">✎</button>
+            <button class="icon-btn menu-toggle" type="button" aria-label="打开操作菜单">⋯</button>
+            <div class="row-menu">
+              <button type="button" class="disable-action">⊘ 禁用</button>
+              <button type="button" class="delete delete-action">⌫ 删除</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function renderTasks(username) {
+      const tasks = taskMap[username] || [];
+      taskUserName.textContent = `${username} 的任务日志`;
+      taskFilterPill.textContent = `用户：${username}`;
+      taskRows.innerHTML = tasks.map(row => `
+        <tr>
+          <td>${row[0]}<br><span class="muted">2026-09-03 ${row[4] === "303.0s" ? "10:44:20" : "10:42:10"}</span></td>
+          <td>${row[1]}</td>
+          <td><div class="user-cell"><span class="mini-avatar">${username.slice(0,1).toUpperCase()}</span>${row[2]}</div></td>
+          <td>${row[3]}<br><span class="muted">doubao · 未知</span></td>
+          <td><span class="status">${row[4]}</span></td>
+          <td><span class="status">${row[5]}</span></td>
+          <td>${row[6]}</td>
+          <td><span class="artifact">▣ ${row[7]}</span></td>
+          <td><button class="ghost-btn" type="button">查看详情</button></td>
+        </tr>
+      `).join("");
+      showView("tasks");
+    }
+
+    function closeMenus() {
+      document.querySelectorAll(".row-menu").forEach(menu => menu.classList.remove("show"));
+    }
+
+    function openDrawer(user) {
+      drawerUsername.value = user.name;
+      drawerDisplay.value = user.name;
+      drawer.classList.add("show");
+      drawerMask.classList.add("show");
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove("show");
+      drawerMask.classList.remove("show");
+    }
+
+    navButtons.forEach(btn => {
+      btn.addEventListener("click", () => showView(btn.dataset.nav));
+    });
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener("click", () => showView(btn.dataset.tab));
+    });
+
+    document.getElementById("backToUsers").addEventListener("click", () => showView("users"));
+    document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+    document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+    drawerMask.addEventListener("click", closeDrawer);
+
+    document.addEventListener("click", event => {
+      const toggle = event.target.closest(".menu-toggle");
+      const row = event.target.closest("tr[data-user]");
+      const editTarget = event.target.closest(".edit-action");
+      const menuButton = event.target.closest(".row-menu button");
+
+      if (!toggle && !event.target.closest(".row-menu")) closeMenus();
+
+      if (toggle) {
+        event.stopPropagation();
+        const menu = toggle.nextElementSibling;
+        const willShow = !menu.classList.contains("show");
+        closeMenus();
+        menu.classList.toggle("show", willShow);
+        return;
+      }
+
+      if (menuButton) {
+        event.stopPropagation();
+        closeMenus();
+        return;
+      }
+
+      if (editTarget && row && usersView && !usersView.classList.contains("hidden")) {
+        event.stopPropagation();
+        const user = users.find(item => item.name === row.dataset.user);
+        openDrawer(user);
+        return;
+      }
+
+      if (row && usersView && !usersView.classList.contains("hidden")) {
+        renderTasks(row.dataset.user);
+      }
+    });
+
+    document.getElementById("userSearch").addEventListener("input", event => {
+      const keyword = event.target.value.trim().toLowerCase();
+      renderUsers(users.filter(user => `${user.name} ${user.sub}`.toLowerCase().includes(keyword)));
+    });
+
+    renderUsers();
+  </script>
+</body>
+</html>

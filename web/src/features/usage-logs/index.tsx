@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -25,6 +25,8 @@ import type { NavGroup } from '@/components/layout/types'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CacheStatsDialog } from '@/features/system-settings/general/channel-affinity/cache-stats-dialog'
 import { useSidebarConfig } from '@/hooks/use-sidebar-config'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { UserInfoDialog } from './components/dialogs/user-info-dialog'
 import {
@@ -35,13 +37,14 @@ import {
 } from './components/usage-logs-provider'
 import { UsageLogsTable } from './components/usage-logs-table'
 import {
+  getVisibleUsageLogSectionsForRole,
   isUsageLogsSectionId,
+  resolveUsageLogsSectionForRole,
   USAGE_LOGS_DEFAULT_SECTION,
   type UsageLogsSectionId,
 } from './section-registry'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
-const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
 const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
   common: {
@@ -59,10 +62,15 @@ function UsageLogsContent() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
-  const activeCategory: UsageLogsSectionId =
+  const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
+  const requestedCategory: UsageLogsSectionId =
     params.section && isUsageLogsSectionId(params.section)
       ? params.section
       : USAGE_LOGS_DEFAULT_SECTION
+  const activeCategory = resolveUsageLogsSectionForRole(
+    requestedCategory,
+    role
+  )
   const {
     selectedUserId,
     userInfoDialogOpen,
@@ -76,13 +84,13 @@ function UsageLogsContent() {
     () => [
       {
         title: 'Task Logs',
-        items: TASK_LOG_SECTIONS.map((section) => ({
+        items: getVisibleUsageLogSectionsForRole(role).map((section) => ({
           title: SECTION_META[section].titleKey,
           url: `/usage-logs/${section}`,
         })),
       },
     ],
-    []
+    [role]
   )
   const filteredTabGroups = useSidebarConfig(tabNavGroups)
   const visibleSections = useMemo(
@@ -121,6 +129,16 @@ function UsageLogsContent() {
     activeCategory === 'common' ? SECTION_META.common : SECTION_META.task
   const showTaskSwitcher =
     activeCategory !== 'common' && visibleSections.length > 1
+
+  useEffect(() => {
+    if (activeCategory !== requestedCategory) {
+      void navigate({
+        to: '/usage-logs/$section',
+        params: { section: activeCategory },
+        replace: true,
+      })
+    }
+  }, [activeCategory, navigate, requestedCategory])
 
   return (
     <>

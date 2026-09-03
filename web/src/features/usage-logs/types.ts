@@ -42,6 +42,7 @@ export interface CommonFilters {
   startTime?: Date
   endTime?: Date
   channel?: string
+  userId?: string
 }
 
 /**
@@ -432,6 +433,7 @@ export interface GetMidjourneyLogsParams {
   p?: number
   page_size?: number
   channel_id?: string
+  user_id?: string
   mj_id?: string
   start_timestamp?: number
   end_timestamp?: number
@@ -445,6 +447,7 @@ export interface GetTaskLogsParams {
   p?: number
   page_size?: number
   channel_id?: string
+  user_id?: string
   task_id?: string
   start_timestamp?: number
   end_timestamp?: number

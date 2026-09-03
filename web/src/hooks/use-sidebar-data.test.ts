@@ -18,7 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { expect, test } from 'vitest'
 
-import { buildCompanySidebarData } from './use-sidebar-data'
+import { ROLE } from '@/lib/roles'
+
+import {
+  buildCompanySidebarData,
+  filterCompanySidebarDataForRole,
+} from './use-sidebar-data'
 
 const t = (key: string) => key
 
@@ -47,4 +52,34 @@ test('company sidebar only exposes approved root entries', () => {
   expect(titles).not.toContain('Subscriptions')
   expect(titles).not.toContain('Task Plugins')
   expect(titles).not.toContain('System Settings')
+})
+
+test('company sidebar keeps the full root view for super admins', () => {
+  const fullData = buildCompanySidebarData(t as never)
+  const titles = filterCompanySidebarDataForRole(
+    fullData.navGroups,
+    ROLE.SUPER_ADMIN
+  ).flatMap((group) => group.items.map((item) => item.title))
+
+  expect(titles).toEqual([
+    'Dashboard',
+    'API Keys',
+    'Usage Logs',
+    'Task Logs',
+    'Wallet',
+    'Profile',
+    'Channels',
+    'Users',
+    'System Info',
+  ])
+})
+
+test('company sidebar narrows ordinary admins to dashboard and user management', () => {
+  const fullData = buildCompanySidebarData(t as never)
+  const titles = filterCompanySidebarDataForRole(
+    fullData.navGroups,
+    ROLE.ADMIN
+  ).flatMap((group) => group.items.map((item) => item.title))
+
+  expect(titles).toEqual(['Dashboard', 'Users'])
 })

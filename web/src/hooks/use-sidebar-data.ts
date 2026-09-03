@@ -112,6 +112,31 @@ export function buildCompanySidebarData(t: TFunction): SidebarData {
   }
 }
 
+export function filterCompanySidebarDataForRole(
+  navGroups: SidebarData['navGroups'],
+  role: number
+): SidebarData['navGroups'] {
+  if (role === ROLE.ADMIN) {
+    return navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => item.url === '/dashboard/models' || item.url === '/users'
+        ),
+      }))
+      .filter((group) => group.items.length > 0)
+  }
+
+  return navGroups
+    .filter((group) => (group.id === 'admin' ? role >= ROLE.ADMIN : true))
+    .map((group) => {
+      const items = group.items.filter(
+        (item) => item.requiredRole === undefined || role >= item.requiredRole
+      )
+      return items.length === group.items.length ? group : { ...group, items }
+    })
+}
+
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
 

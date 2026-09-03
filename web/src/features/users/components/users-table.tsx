@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { getRouteApi } from '@tanstack/react-router'
+import { getRouteApi, useNavigate } from '@tanstack/react-router'
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,10 +27,14 @@ import {
   DISABLED_ROW_DESKTOP,
   DISABLED_ROW_MOBILE,
   DataTablePage,
+  DataTableRow,
   useDataTable,
 } from '@/components/data-table'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { ROLE } from '@/lib/roles'
+import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getUsers, searchUsers } from '../api'
 import {
@@ -39,6 +43,10 @@ import {
   getUserRoleOptions,
   isUserDeleted,
 } from '../constants'
+import {
+  buildUserTaskLogNavigation,
+  canOpenUserTaskLogs,
+} from '../lib/user-task-navigation'
 import type { User, UserSortBy } from '../types'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useUsersColumns } from './users-columns'
@@ -63,6 +71,10 @@ export function UsersTable() {
   const { t } = useTranslation()
   const columns = useUsersColumns()
   const { refreshTrigger } = useUsers()
+  const navigate = useNavigate()
+  const currentRole = useAuthStore((s) => s.auth.user?.role ?? ROLE.GUEST)
+  const simplifiedAdminView = currentRole === ROLE.ADMIN
+  const taskLogRowClickEnabled = canOpenUserTaskLogs(currentRole)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -81,7 +93,9 @@ export function UsersTable() {
     globalFilter: { enabled: true, key: 'filter' },
     columnFilters: [
       { columnId: 'status', searchKey: 'status', type: 'array' },
-      { columnId: 'role', searchKey: 'role', type: 'array' },
+      ...(simplifiedAdminView
+        ? []
+        : [{ columnId: 'role', searchKey: 'role', type: 'array' as const }]),
       { columnId: 'group', searchKey: 'group', type: 'string' },
     ],
   })
@@ -169,6 +183,9 @@ export function UsersTable() {
   })
 
   const users = data?.items || []
+  const handleOpenUserTasks = (userId: number) => {
+    void navigate(buildUserTaskLogNavigation(userId))
+  }
 
   const { table } = useDataTable({
     data: users,
@@ -224,19 +241,48 @@ export function UsersTable() {
             options: getUserStatusOptions(t),
             singleSelect: true,
           },
-          {
-            columnId: 'role',
-            title: t('Role'),
-            options: getUserRoleOptions(t),
-            singleSelect: true,
-          },
+          ...(simplifiedAdminView
+            ? []
+            : [
+                {
+                  columnId: 'role',
+                  title: t('Role'),
+                  options: getUserRoleOptions(t),
+                  singleSelect: true,
+                },
+              ]),
         ],
       }}
       getRowClassName={(row, { isMobile }) =>
-        isDisabledUserRow(row.original)
-          ? isMobile
-            ? DISABLED_ROW_MOBILE
-            : DISABLED_ROW_DESKTOP
+        cn(
+          taskLogRowClickEnabled && 'cursor-pointer',
+          isDisabledUserRow(row.original)
+            ? isMobile
+              ? DISABLED_ROW_MOBILE
+              : DISABLED_ROW_DESKTOP
+            : undefined
+        )
+      }
+      renderRow={
+        taskLogRowClickEnabled
+          ? (row, { getCellClassName }) => (
+              <DataTableRow
+                key={row.id}
+                row={row}
+                className={cn(
+                  'cursor-pointer transition-colors',
+                  isDisabledUserRow(row.original) && DISABLED_ROW_DESKTOP
+                )}
+                getColumnClassName={(columnId) => getCellClassName(columnId)}
+                cellRenderColumns={columns}
+                onClick={() => handleOpenUserTasks(row.original.id)}
+              />
+            )
+          : undefined
+      }
+      mobileProps={
+        taskLogRowClickEnabled
+          ? { onRowClick: (row) => handleOpenUserTasks(row.original.id) }
           : undefined
       }
       bulkActions={<DataTableBulkActions table={table} />}

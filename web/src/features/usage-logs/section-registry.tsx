@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createSectionRegistry } from '@/features/system-settings/utils/section-registry'
+import { ROLE } from '@/lib/roles'
 
 /**
  * Usage logs page section definitions
@@ -40,6 +41,14 @@ const USAGE_LOGS_SECTIONS = [
 ] as const
 
 export type UsageLogsSectionId = (typeof USAGE_LOGS_SECTIONS)[number]['id']
+export type TaskUsageLogsSectionId = Extract<
+  UsageLogsSectionId,
+  'drawing' | 'task'
+>
+const TASK_USAGE_LOGS_SECTIONS: readonly TaskUsageLogsSectionId[] = [
+  'drawing',
+  'task',
+]
 
 const usageLogsRegistry = createSectionRegistry<
   UsageLogsSectionId,
@@ -59,4 +68,18 @@ export const USAGE_LOGS_DEFAULT_SECTION = usageLogsRegistry.defaultSection
 export function isUsageLogsSectionId(s: string): s is UsageLogsSectionId {
   return (USAGE_LOGS_SECTION_IDS as readonly string[]).includes(s)
 }
+
+export function getVisibleUsageLogSectionsForRole(
+  role: number
+): readonly TaskUsageLogsSectionId[] {
+  return role === ROLE.ADMIN ? ['task'] : TASK_USAGE_LOGS_SECTIONS
+}
+
+export function resolveUsageLogsSectionForRole(
+  section: UsageLogsSectionId,
+  role: number
+): UsageLogsSectionId {
+  return role === ROLE.ADMIN && section !== 'task' ? 'task' : section
+}
+
 export const getUsageLogsSectionNavItems = usageLogsRegistry.getSectionNavItems

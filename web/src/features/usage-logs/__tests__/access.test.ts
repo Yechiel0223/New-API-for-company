@@ -22,6 +22,10 @@ import { describe, test } from 'vitest'
 import { ROLE } from '@/lib/roles'
 
 import { resolveLogsViewAccess } from '../components/usage-logs-provider'
+import {
+  getVisibleUsageLogSectionsForRole,
+  resolveUsageLogsSectionForRole,
+} from '../section-registry'
 
 describe('usage log access tier', () => {
   test('keeps users and elevated self views on the self tier', () => {
@@ -33,5 +37,29 @@ describe('usage log access tier', () => {
   test('distinguishes admin and root while viewing all logs', () => {
     assert.equal(resolveLogsViewAccess(ROLE.ADMIN, 'all'), 'admin')
     assert.equal(resolveLogsViewAccess(ROLE.SUPER_ADMIN, 'all'), 'root')
+  })
+
+  test('limits ordinary admins to task logs only', () => {
+    assert.deepEqual(getVisibleUsageLogSectionsForRole(ROLE.ADMIN), ['task'])
+    assert.equal(
+      resolveUsageLogsSectionForRole('drawing', ROLE.ADMIN),
+      'task'
+    )
+    assert.equal(resolveUsageLogsSectionForRole('common', ROLE.ADMIN), 'task')
+  })
+
+  test('keeps root usage log sections unchanged', () => {
+    assert.deepEqual(getVisibleUsageLogSectionsForRole(ROLE.SUPER_ADMIN), [
+      'drawing',
+      'task',
+    ])
+    assert.equal(
+      resolveUsageLogsSectionForRole('drawing', ROLE.SUPER_ADMIN),
+      'drawing'
+    )
+    assert.equal(
+      resolveUsageLogsSectionForRole('common', ROLE.SUPER_ADMIN),
+      'common'
+    )
   })
 })

@@ -154,6 +154,7 @@ export function UsersMutateDrawer({
   const currentQuotaRaw = form.watch('quota_dollars') || 0
   const selectedRole = form.watch('role')
   const canEditAdminPermissions = currentUser?.role === ROLE.SUPER_ADMIN
+  const canViewBindingInformation = currentUser?.role === ROLE.SUPER_ADMIN
   const targetIsAdmin = (selectedRole ?? currentRow?.role ?? 0) >= ROLE.ADMIN
 
   const onSubmit = async (data: UserFormValues) => {
@@ -542,7 +543,7 @@ export function UsersMutateDrawer({
                 )}
 
               {/* Binding Information (Read-only) */}
-              {isUpdate && (
+              {isUpdate && canViewBindingInformation && (
                 <SideDrawerSection>
                   <h3 className='text-sm font-medium'>
                     {t('Binding Information')}
