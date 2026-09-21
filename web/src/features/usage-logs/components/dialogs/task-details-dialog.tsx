@@ -180,7 +180,6 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
               value={`#${props.log.channel_id}`}
               mono
             />
-            <DetailRow label={t('Group')} value={props.log.group || '-'} />
             <DetailRow
               label={t('Quota')}
               value={formatLogQuota(props.log.quota)}

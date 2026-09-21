@@ -600,7 +600,6 @@ export function ChannelAffinitySection(props: Props) {
                 header: t('Scope'),
                 cell: (rule) => {
                   const scopeItems = [
-                    rule.include_using_group && t('Group'),
                     rule.include_model_name && t('Model'),
                     rule.include_rule_name && t('Rule'),
                   ].filter(Boolean) as string[]

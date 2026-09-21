@@ -79,7 +79,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import { type IconBadgeTone, IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -99,7 +99,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -132,8 +131,6 @@ import {
   getAllModels,
   getChannel,
   getChannelKey,
-  getGroups,
-  getPrefillGroups,
   getTaskPluginOptions,
   refreshCodexCredential,
 } from '../../api'
@@ -182,8 +179,8 @@ import { useChannels } from '../channels-provider'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
-  MissingModelsConfirmationDialog,
   type MissingModelsAction,
+  MissingModelsConfirmationDialog,
 } from '../dialogs/missing-models-confirmation-dialog'
 import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dialog'
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
@@ -339,8 +336,6 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     hasConfiguredOverrideValue(values.status_code_mapping) ||
     values.tag?.trim() ||
     values.remark?.trim() ||
-    values.priority ||
-    values.weight ||
     values.proxy?.trim() ||
     values.system_prompt?.trim() ||
     values.force_format ||
@@ -675,12 +670,6 @@ export function ChannelMutateDrawer({
     enabled: isEditing && Boolean(channelId),
   })
 
-  // Fetch available groups
-  const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-  })
-
   // Fetch all available models
   const { data: allModelsData } = useQuery({
     queryKey: ['channel_models'],
@@ -688,10 +677,6 @@ export function ChannelMutateDrawer({
   })
 
   // Fetch prefill model groups
-  const { data: prefillGroupsData } = useQuery({
-    queryKey: ['prefill_groups', 'model'],
-    queryFn: () => getPrefillGroups('model'),
-  })
 
   const { copyToClipboard } = useCopyToClipboard()
 
@@ -729,7 +714,6 @@ export function ChannelMutateDrawer({
   const multiKeyMode = form.watch('multi_key_mode')
   const multiKeyType = form.watch('multi_key_type')
   const keyMode = form.watch('key_mode')
-  const currentGroups = form.watch('group')
   const currentType = form.watch('type')
   const currentStatus = form.watch('status')
   const currentBaseUrl = form.watch('base_url')
@@ -745,8 +729,6 @@ export function ChannelMutateDrawer({
   )
   const currentSettings = form.watch('settings')
   const currentAdvancedCustom = form.watch('advanced_custom')
-  const currentPriority = form.watch('priority')
-  const currentWeight = form.watch('weight')
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
   const currentTag = form.watch('tag')
@@ -910,20 +892,6 @@ export function ChannelMutateDrawer({
   }, [allModelsList, currentType])
 
   // Get prefill groups
-  const prefillGroups = useMemo(
-    () => prefillGroupsData?.data || [],
-    [prefillGroupsData]
-  )
-
-  // Transform groups to multi-select options
-  const groupOptions = useMemo(() => {
-    if (!groupsData?.data) return []
-    const allGroups = new Set([...groupsData.data, ...(currentGroups || [])])
-    return [...allGroups].map((group) => ({
-      value: group,
-      label: group,
-    }))
-  }, [groupsData, currentGroups])
 
   // Parse current models as array
   const currentModelsArray = useMemo(
@@ -980,7 +948,7 @@ export function ChannelMutateDrawer({
     formErrors.azure_responses_version
   )
   const modelsHaveErrors = Boolean(
-    formErrors.models || formErrors.group || formErrors.model_mapping
+    formErrors.models || formErrors.model_mapping
   )
   const advancedHaveErrors =
     hasAdvancedSettingsErrors(formErrors) || Boolean(formErrors.advanced_custom)
@@ -992,9 +960,7 @@ export function ChannelMutateDrawer({
     (!providerRequiresBaseUrl || currentBaseUrl?.trim()) &&
     (!providerRequiresOther || currentOther?.trim())
   )
-  const modelsComplete = Boolean(
-    currentModelsArray.length > 0 && currentGroups?.length
-  )
+  const modelsComplete = Boolean(currentModelsArray.length)
   const requiredCompletedCount = [
     identityComplete,
     credentialsComplete,
@@ -1019,10 +985,7 @@ export function ChannelMutateDrawer({
     : 'idle'
   const advancedSummary = advancedHaveErrors ? t('Error') : undefined
   const routingStrategyConfigured = Boolean(
-    currentPriority ||
-    currentWeight ||
-    currentTestModel?.trim() ||
-    (currentAutoBan ?? 1) !== 1
+    currentTestModel?.trim() || (currentAutoBan ?? 1) !== 1
   )
   const internalNotesConfigured = Boolean(
     currentTag?.trim() || currentRemark?.trim()
@@ -1131,7 +1094,7 @@ export function ChannelMutateDrawer({
     },
     {
       id: CHANNEL_EDITOR_SECTION_IDS.models,
-      title: t('Models & Groups'),
+      title: t('Models'),
       description: getSectionStatusLabel(modelsStatus, t),
       statusLabel: getSectionStatusLabel(modelsStatus, t),
       status: modelsStatus,
@@ -1535,30 +1498,6 @@ export function ChannelMutateDrawer({
   }, [form, copyToClipboard, t])
 
   // Handle adding prefill group models
-  const handleAddPrefillGroup = useCallback(
-    (group: { id: number; name: string; items: string | string[] }) => {
-      try {
-        const items = Array.isArray(group.items)
-          ? group.items
-          : JSON.parse(group.items)
-
-        if (!Array.isArray(items)) {
-          throw new Error('Invalid items format')
-        }
-
-        const count = updateModels(items, true)
-        toast.success(
-          t('Added {{count}} models from "{{name}}"', {
-            count,
-            name: group.name,
-          })
-        )
-      } catch {
-        toast.error(t('Failed to parse group items'))
-      }
-    },
-    [updateModels, t]
-  )
 
   // Handle model selection change from MultiSelect
   const handleModelsChange = useCallback(
@@ -1927,7 +1866,7 @@ export function ChannelMutateDrawer({
                   'Sensitive channel settings are read-only for your account.'
                 )}{' '}
                 {t(
-                  'You can still edit non-sensitive operations fields such as models, groups, priority, and weight.'
+                  'You can still edit supported models and other non-sensitive settings.'
                 )}
               </AlertDescription>
             </Alert>
@@ -3343,7 +3282,7 @@ export function ChannelMutateDrawer({
                       </ChannelApiAccessSection>
                     </div>
 
-                    {/* ── Models & Groups ── */}
+                    {/* ── Models ── */}
                     <div
                       id={CHANNEL_EDITOR_SECTION_IDS.models}
                       className='scroll-mt-4'
@@ -3513,26 +3452,6 @@ export function ChannelMutateDrawer({
                                   {t('Clear All')}
                                 </Button>
                               </div>
-                              {prefillGroups.length > 0 && (
-                                <div className='flex flex-wrap items-center gap-2'>
-                                  <span className='text-muted-foreground text-xs'>
-                                    {t('Preset groups')}:
-                                  </span>
-                                  {prefillGroups.map((group) => (
-                                    <Button
-                                      key={group.id}
-                                      type='button'
-                                      variant='secondary'
-                                      size='sm'
-                                      onClick={() =>
-                                        handleAddPrefillGroup(group)
-                                      }
-                                    >
-                                      {group.name}
-                                    </Button>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </div>
 
@@ -3674,38 +3593,6 @@ export function ChannelMutateDrawer({
                               )}
                             />
                           </div>
-
-                          <div className='border-border/60 rounded-lg border p-4'>
-                            <FormField
-                              control={form.control}
-                              name='group'
-                              render={({ field }) => (
-                                <FormItem className='space-y-3'>
-                                  <div className='space-y-1'>
-                                    <FormLabel>{t('Groups *')}</FormLabel>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.GROUP)}
-                                    </FormDescription>
-                                  </div>
-                                  <FormControl>
-                                    {isLoadingGroups ? (
-                                      <Skeleton className='h-10 w-full' />
-                                    ) : (
-                                      <MultiSelect
-                                        options={groupOptions}
-                                        selected={field.value}
-                                        onChange={field.onChange}
-                                        placeholder={t(
-                                          FIELD_PLACEHOLDERS.GROUP
-                                        )}
-                                      />
-                                    )}
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
                         </div>
                       </ChannelModelsSection>
                     </div>
@@ -3738,55 +3625,6 @@ export function ChannelMutateDrawer({
                               icon={<Route className='h-3.5 w-3.5' />}
                               iconTone='info'
                             />
-                            <div className='grid gap-4 sm:grid-cols-2'>
-                              <FormField
-                                control={form.control}
-                                name='priority'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{t('Priority')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type='number'
-                                        placeholder='0'
-                                        {...field}
-                                        onChange={(e) =>
-                                          field.onChange(Number(e.target.value))
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.PRIORITY)}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
-                                name='weight'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{t('Weight')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type='number'
-                                        placeholder='0'
-                                        {...field}
-                                        onChange={(e) =>
-                                          field.onChange(Number(e.target.value))
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.WEIGHT)}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
 
                             <FormField
                               control={form.control}

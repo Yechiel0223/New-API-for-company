@@ -23,7 +23,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
-import { GroupBadge } from '@/components/group-badge'
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -40,12 +39,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 
-import {
-  editTagChannels,
-  getTagModels,
-  getAllModels,
-  getGroups,
-} from '../../api'
+import { editTagChannels, getTagModels, getAllModels } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import type { TagOperationParams } from '../../types'
 import { useChannels } from '../channels-provider'
@@ -65,7 +59,6 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [customModel, setCustomModel] = useState('')
   const [modelMapping, setModelMapping] = useState('')
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch tag models
@@ -82,23 +75,14 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     enabled: open,
   })
 
-  // Fetch groups
-  const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-    enabled: open,
-  })
-
   const availableModels =
     allModelsData?.data?.map((m) => m.id).filter(Boolean) || []
-  const availableGroups = groupsData?.data || []
 
   // Initialize form when tag changes
   useEffect(() => {
     if (open && currentTag) {
       setNewTag(currentTag)
       setModelMapping('')
-      setSelectedGroups([])
       setCustomModel('')
 
       // Load tag models
@@ -135,12 +119,6 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     setSelectedModels(selectedModels.filter((m) => m !== model))
   }
 
-  const handleToggleGroup = (group: string) => {
-    setSelectedGroups((prev) =>
-      prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]
-    )
-  }
-
   const validateForm = () => {
     // Validate model mapping if provided
     if (modelMapping.trim()) {
@@ -158,21 +136,9 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     if (!currentTag) return
     if (!validateForm()) return
 
-    // Check if anything changed
-    const hasChanges =
-      newTag !== currentTag ||
-      modelMapping.trim() ||
-      selectedModels.length > 0 ||
-      selectedGroups.length > 0
-
-    if (!hasChanges) {
-      toast.warning(t('No changes to save'))
-      return
-    }
-
     setIsSubmitting(true)
     try {
-      const params: Record<string, string | null> = { tag: currentTag }
+      const params: Record<string, string | number | null> = { tag: currentTag }
 
       if (newTag && newTag !== currentTag) {
         params.new_tag = newTag || null
@@ -186,9 +152,9 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
         params.models = selectedModels.join(',')
       }
 
-      if (selectedGroups.length > 0) {
-        params.groups = selectedGroups.join(',')
-      }
+      params.groups = 'default'
+      params.priority = 0
+      params.weight = 0
 
       const response = await editTagChannels(
         params as unknown as TagOperationParams
@@ -304,12 +270,10 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
 
                 <div className='flex gap-2'>
                   <Select<string>
-                    items={[
-                      ...availableModels.map((model) => ({
-                        value: model,
-                        label: model,
-                      })),
-                    ]}
+                    items={availableModels.map((model) => ({
+                      value: model,
+                      label: model,
+                    }))}
                     onValueChange={(value) => {
                       if (value === null) return
                       if (!selectedModels.includes(value)) {
@@ -410,30 +374,6 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
               >
                 {t('No Change')}
               </Button>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Groups */}
-          <div className='space-y-2'>
-            <Label>
-              {t('Groups')}
-              <span className='text-muted-foreground ml-2 text-xs'>
-                {t("(Override all channels' groups)")}
-              </span>
-            </Label>
-            <div className='flex min-h-[60px] flex-wrap gap-2 rounded-md border p-3'>
-              {availableGroups.map((group) => (
-                <GroupBadge
-                  key={group}
-                  group={group}
-                  className={`cursor-pointer rounded-sm transition-opacity hover:opacity-70 ${
-                    selectedGroups.includes(group) ? 'bg-muted/70 px-1' : ''
-                  }`}
-                  onClick={() => handleToggleGroup(group)}
-                />
-              ))}
             </div>
           </div>
         </div>

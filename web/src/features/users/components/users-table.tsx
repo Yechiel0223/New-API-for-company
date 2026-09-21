@@ -58,7 +58,6 @@ const USER_SORTABLE_COLUMNS = new Set<UserSortBy>([
   'id',
   'username',
   'quota',
-  'group',
   'created_at',
   'last_login_at',
 ])
@@ -96,7 +95,6 @@ export function UsersTable() {
       ...(simplifiedAdminView
         ? []
         : [{ columnId: 'role', searchKey: 'role', type: 'array' as const }]),
-      { columnId: 'group', searchKey: 'group', type: 'string' },
     ],
   })
   const statusFilter =
@@ -107,10 +105,6 @@ export function UsersTable() {
     (columnFilters.find((filter) => filter.id === 'role')?.value as
       | string[]
       | undefined) ?? []
-  const groupFilter =
-    (columnFilters.find((filter) => filter.id === 'group')?.value as string) ??
-    ''
-
   const sortParams = useMemo(() => {
     const activeSort = sorting[0]
     if (
@@ -142,14 +136,12 @@ export function UsersTable() {
       globalFilter,
       statusFilter,
       roleFilter,
-      groupFilter,
       sortParams,
       refreshTrigger,
     ],
     queryFn: async () => {
       const hasFilter = globalFilter?.trim()
-      const hasColumnFilter =
-        statusFilter.length > 0 || roleFilter.length > 0 || Boolean(groupFilter)
+      const hasColumnFilter = statusFilter.length > 0 || roleFilter.length > 0
       const params = {
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
@@ -163,7 +155,6 @@ export function UsersTable() {
               keyword: globalFilter,
               status: statusFilter[0] ?? '',
               role: roleFilter[0] ?? '',
-              group: groupFilter,
             })
           : await getUsers(params)
 

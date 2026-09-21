@@ -107,7 +107,7 @@ export function transformFormDataToPayload(
     payload.role = role
   } else {
     // For update: quota is adjusted atomically via /api/user/manage, not sent here
-    payload.group = data.group
+    payload.group = DEFAULT_GROUP
     payload.remark = data.remark || undefined
     payload.id = userId
   }
@@ -127,7 +127,7 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     password: '',
     role: user.role,
     quota_dollars: quotaUnitsToDollars(user.quota),
-    group: user.group || DEFAULT_GROUP,
+    group: DEFAULT_GROUP,
     remark: user.remark || '',
     admin_permissions: user.admin_permissions ?? {},
   }

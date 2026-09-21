@@ -28,10 +28,7 @@ import type { ApiKey, ApiKeyFormData } from '../types'
 // Form Schema
 // ============================================================================
 
-export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
-  const autoGroupLimit =
-    Number.isInteger(maxAutoGroups) && maxAutoGroups > 0 ? maxAutoGroups : 5
-
+export function getApiKeyFormSchema(t: TFunction) {
   return z
     .object({
       name: z.string().min(1, t('Please enter a name')),
@@ -47,39 +44,6 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       tokenCount: z.number().min(1).optional(),
     })
     .superRefine((data, ctx) => {
-      if (data.group === 'auto') {
-        if (
-          data.auto_groups_mode === 'custom' &&
-          data.auto_groups.length === 0
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['auto_groups'],
-            message: t(
-              'Select at least one Auto group or restore global Auto.'
-            ),
-          })
-        }
-
-        if (data.auto_groups.length > autoGroupLimit) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['auto_groups'],
-            message: t('Select at most {{max}} Auto groups', {
-              max: autoGroupLimit,
-            }),
-          })
-        }
-
-        if (new Set(data.auto_groups).size !== data.auto_groups.length) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['auto_groups'],
-            message: t('Auto groups must not contain duplicates'),
-          })
-        }
-      }
-
       if (data.unlimited_quota) {
         return
       }
@@ -113,19 +77,19 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   group: DEFAULT_GROUP,
   auto_groups_mode: 'inherit',
   auto_groups: [],
-  cross_group_retry: true,
+  cross_group_retry: false,
   tokenCount: 1,
 }
 
 export function getApiKeyFormDefaultValues(
-  defaultUseAutoGroup: boolean
+  _defaultUseAutoGroup: boolean
 ): ApiKeyFormValues {
   return {
     ...API_KEY_FORM_DEFAULT_VALUES,
-    group: defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP,
+    group: DEFAULT_GROUP,
     auto_groups_mode: 'inherit',
     auto_groups: [],
-    cross_group_retry: defaultUseAutoGroup,
+    cross_group_retry: false,
   }
 }
 
@@ -144,19 +108,14 @@ export function transformFormDataToPayload(
     remain_quota: data.unlimited_quota
       ? 0
       : parseQuotaFromDollars(data.remain_quota_dollars || 0),
-    expired_time: data.expired_time
-      ? Math.floor(data.expired_time.getTime() / 1000)
-      : -1,
+    expired_time: -1,
     unlimited_quota: data.unlimited_quota,
-    model_limits_enabled: data.model_limits.length > 0,
-    model_limits: data.model_limits.join(','),
-    allow_ips: data.allow_ips || '',
-    group: data.group || '',
-    auto_groups:
-      data.group === 'auto' && data.auto_groups_mode === 'custom'
-        ? data.auto_groups
-        : [],
-    cross_group_retry: data.group === 'auto' ? !!data.cross_group_retry : false,
+    model_limits_enabled: false,
+    model_limits: '',
+    allow_ips: '',
+    group: DEFAULT_GROUP,
+    auto_groups: [],
+    cross_group_retry: false,
   }
 }
 
@@ -165,34 +124,22 @@ export function transformFormDataToPayload(
  */
 export function transformApiKeyToFormDefaults(
   apiKey: ApiKey,
-  availableAutoGroups: string[] = [],
-  maxAutoGroups = 5
+  _availableAutoGroups: string[] = [],
+  _maxAutoGroups = 5
 ): ApiKeyFormValues {
-  const availableSet = new Set(availableAutoGroups)
-  const storedAutoGroups = apiKey.auto_groups ?? []
-  const autoGroups = storedAutoGroups
-    .filter((group) => availableSet.has(group))
-    .slice(0, Math.max(0, maxAutoGroups))
-  const autoGroupsMode = storedAutoGroups.length > 0 ? 'custom' : 'inherit'
-
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
       ? 0
       : quotaUnitsToDollars(apiKey.remain_quota),
-    expired_time:
-      apiKey.expired_time > 0
-        ? new Date(apiKey.expired_time * 1000)
-        : undefined,
+    expired_time: undefined,
     unlimited_quota: apiKey.unlimited_quota,
-    model_limits: apiKey.model_limits
-      ? apiKey.model_limits.split(',').filter(Boolean)
-      : [],
-    allow_ips: apiKey.allow_ips || '',
-    group: apiKey.group || DEFAULT_GROUP,
-    auto_groups_mode: autoGroupsMode,
-    auto_groups: autoGroups,
-    cross_group_retry: !!apiKey.cross_group_retry,
+    model_limits: [],
+    allow_ips: '',
+    group: DEFAULT_GROUP,
+    auto_groups_mode: 'inherit',
+    auto_groups: [],
+    cross_group_retry: false,
     tokenCount: 1,
   }
 }

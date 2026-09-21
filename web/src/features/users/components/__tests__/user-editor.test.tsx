@@ -45,7 +45,7 @@ const target: User = {
   quota: 500000,
   used_quota: 0,
   request_count: 0,
-  group: 'default',
+  group: 'vip',
   github_id: 'github-identity',
   wechat_id: 'wechat-identity',
 }
@@ -130,7 +130,43 @@ function UsernameColumn() {
   )
 }
 
+function UserHeaders() {
+  const table = useReactTable({
+    data: [],
+    columns: useUsersColumns(),
+    getCoreRowModel: getCoreRowModel(),
+  })
+  return (
+    <table>
+      <thead>
+        {table.getHeaderGroups().map((group) => (
+          <tr key={group.id}>
+            {group.headers.map((header) => (
+              <th key={header.id}>
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext()
+                )}
+              </th>
+            ))}
+          </tr>
+        ))}
+      </thead>
+    </table>
+  )
+}
+
 describe('simplified user editor', () => {
+  it('removes invitation and group columns from the user list', () => {
+    render(<UserHeaders />)
+    expect(screen.getByRole('columnheader', { name: 'Username' })).toBeVisible()
+    expect(
+      screen.queryByRole('columnheader', { name: 'Group' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('columnheader', { name: 'Invite Info' })
+    ).not.toBeInTheDocument()
+  })
   it('hides removed fields while retaining existing metadata in updates', async () => {
     const request = vi
       .spyOn(api, 'put')
@@ -144,6 +180,7 @@ describe('simplified user editor', () => {
     )
     expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Remark')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Group')).not.toBeInTheDocument()
     expect(screen.queryByText('Binding Information')).not.toBeInTheDocument()
     expect(screen.queryByText('GitHub')).not.toBeInTheDocument()
     expect(screen.queryByText('WeChat')).not.toBeInTheDocument()
@@ -161,6 +198,7 @@ describe('simplified user editor', () => {
           display_name: 'Legacy display',
           remark: 'Existing note',
           password: 'NewPass123!',
+          group: 'default',
         })
       )
     )

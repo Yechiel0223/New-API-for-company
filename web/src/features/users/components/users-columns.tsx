@@ -19,8 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
-import { BadgeCell } from '@/components/data-table'
-import { GroupBadge } from '@/components/group-badge'
 import { LongText } from '@/components/long-text'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
@@ -30,7 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota, formatTimestamp } from '@/lib/format'
+import { formatTimestamp } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -152,25 +150,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
       minSize: 260,
       meta: { mobileOrder: 40 },
     },
-    {
-      accessorKey: 'group',
-      header: t('Group'),
-      cell: ({ row }) => {
-        const group = row.getValue('group') as string
-        return (
-          <BadgeCell>
-            <GroupBadge group={group} />
-          </BadgeCell>
-        )
-      },
-      filterFn: (row, id, value) => {
-        const group = String(row.getValue(id) || t('User Group')).toLowerCase()
-        const searchValue = String(value).toLowerCase()
-        return group.includes(searchValue)
-      },
-      size: 140,
-      meta: { mobileOrder: 30 },
-    },
+
     {
       accessorKey: 'created_at',
       header: t('Created At'),
@@ -208,111 +188,33 @@ export function useUsersColumns(): ColumnDef<User>[] {
   ]
 
   if (!simplifiedAdminView) {
-    columns.splice(
-      6,
-      0,
-      {
-        accessorKey: 'role',
-        header: t('Role'),
-        cell: ({ row }) => {
-          const roleValue = row.getValue('role') as number
-          const roleConfig = USER_ROLES[roleValue as keyof typeof USER_ROLES]
+    columns.splice(5, 0, {
+      accessorKey: 'role',
+      header: t('Role'),
+      cell: ({ row }) => {
+        const roleValue = row.getValue('role') as number
+        const roleConfig = USER_ROLES[roleValue as keyof typeof USER_ROLES]
 
-          if (!roleConfig) {
-            return null
-          }
+        if (!roleConfig) {
+          return null
+        }
 
-          return (
-            <div className='flex items-center gap-x-2'>
-              {roleConfig.icon && (
-                <roleConfig.icon size={16} className='text-muted-foreground' />
-              )}
-              <span className='text-sm'>{t(roleConfig.labelKey)}</span>
-            </div>
-          )
-        },
-        filterFn: (row, id, value) => {
-          return value.includes(String(row.getValue(id)))
-        },
-        enableSorting: false,
-        size: 120,
-        meta: { mobileOrder: 20 },
+        return (
+          <div className='flex items-center gap-x-2'>
+            {roleConfig.icon && (
+              <roleConfig.icon size={16} className='text-muted-foreground' />
+            )}
+            <span className='text-sm'>{t(roleConfig.labelKey)}</span>
+          </div>
+        )
       },
-      {
-        id: 'invite_info',
-        header: t('Invite Info'),
-        cell: ({ row }) => {
-          const user = row.original
-          const affCount = user.aff_count || 0
-          const affHistoryQuota = user.aff_history_quota || 0
-          const inviterId = user.inviter_id || 0
-
-          return (
-            <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={`${t('Invited')}: ${affCount}`}
-                      variant='neutral'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p className='text-xs'>{t('Number of users invited')}</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={`${t('Revenue')}: ${formatQuota(affHistoryQuota)}`}
-                      variant='neutral'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p className='text-xs'>{t('Total invitation revenue')}</p>
-                </TooltipContent>
-              </Tooltip>
-              {inviterId > 0 && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <StatusBadge
-                        label={`${t('Inviter')}: ${inviterId}`}
-                        variant='neutral'
-                        copyable={false}
-                        className='cursor-help'
-                      />
-                    }
-                  />
-                  <TooltipContent>
-                    <p className='text-xs'>
-                      {t('Invited by user ID')} {inviterId}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {inviterId === 0 && (
-                <StatusBadge
-                  label={t('No Inviter')}
-                  variant='neutral'
-                  copyable={false}
-                />
-              )}
-            </div>
-          )
-        },
-        size: 240,
-        enableSorting: false,
-        meta: { mobileHidden: true },
-      }
-    )
+      filterFn: (row, id, value) => {
+        return value.includes(String(row.getValue(id)))
+      },
+      enableSorting: false,
+      size: 120,
+      meta: { mobileOrder: 20 },
+    })
   }
 
   return columns

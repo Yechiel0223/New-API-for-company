@@ -16,265 +16,164 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, test } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createInstance } = await import('i18next')
-const { I18nextProvider, initReactI18next } = await import('react-i18next')
-const { QueryClient, QueryClientProvider } =
-  await import('@tanstack/react-query')
-const { api } = await import('@/lib/api')
-const { ApiKeysProvider } = await import('../api-keys-provider')
-const { ApiKeysMutateDrawer } = await import('../api-keys-mutate-drawer')
+import { api } from '@/lib/api'
 
-const i18n = createInstance()
-await i18n.use(initReactI18next).init({
-  lng: 'en',
-  resources: { en: { translation: {} } },
-})
+import type { ApiKey } from '../../types'
+import { useApiKeysColumns } from '../api-keys-columns'
+import { ApiKeysMutateDrawer } from '../api-keys-mutate-drawer'
+import { ApiKeysProvider } from '../api-keys-provider'
 
-type ApiMethod = (url: string, data?: unknown) => Promise<{ data: unknown }>
-type MockableApi = {
-  get: ApiMethod
-  post: ApiMethod
+const key: ApiKey = {
+  id: 7,
+  name: 'restricted',
+  key: '',
+  status: 1,
+  remain_quota: 500000,
+  used_quota: 0,
+  unlimited_quota: false,
+  expired_time: 123,
+  created_time: 1,
+  accessed_time: 0,
+  group: 'vip',
+  auto_groups: ['vip'],
+  cross_group_retry: true,
+  model_limits_enabled: true,
+  model_limits: 'gpt-4',
+  allow_ips: '127.0.0.1',
 }
-type RenderedDrawer = {
-  queryClient: InstanceType<typeof QueryClient>
-}
-
-const apiClient = api as unknown as MockableApi
-const originalGet = apiClient.get
-const originalPost = apiClient.post
-let renderedDrawer: RenderedDrawer | null = null
-
-function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
-  apiClient.get = async (url) => {
-    switch (url) {
-      case '/api/status':
-        return { data: { data: { default_use_auto_group: true } } }
-      case '/api/user/models':
-        return { data: { success: true, data: [] } }
-      case '/api/user/self/groups':
-        return {
-          data: {
-            success: true,
-            data: {
-              auto: { desc: 'Automatic routing', ratio: 'auto' },
-              default: { desc: 'Standard access', ratio: 1 },
-              vip: { desc: 'Priority access', ratio: 2 },
-            },
-          },
-        }
-      case '/api/token/auto-groups':
-        return {
-          data: {
-            success: true,
-            data: { groups: ['vip', 'default'], max_count: 3 },
-          },
-        }
-      default:
-        throw new Error(`Unexpected GET ${url}`)
-    }
-  }
-  apiClient.post = async (url, data) => {
-    expect(url).toBe('/api/token/')
-    expect(data && typeof data === 'object').toBeTruthy()
-    createdPayloads.push(data as Record<string, unknown>)
-    return { data: { success: true, data: {} } }
-  }
-}
-
-async function renderCreateDrawer(): Promise<void> {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+let client: QueryClient
+beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/token/7') return { data: { success: true, data: key } }
+    throw new Error(`Unexpected GET ${url}`)
   })
-  const freshAt = Date.now() + 60_000
-  queryClient.setQueryData(
-    ['status'],
-    { default_use_auto_group: true },
-    { updatedAt: freshAt }
-  )
-  queryClient.setQueryData(
-    ['user-models'],
-    { success: true, data: [] },
-    { updatedAt: freshAt }
-  )
-  queryClient.setQueryData(
-    ['user-groups'],
-    {
-      success: true,
-      data: {
-        auto: { desc: 'Automatic routing', ratio: 'auto' },
-        default: { desc: 'Standard access', ratio: 1 },
-        vip: { desc: 'Priority access', ratio: 2 },
-      },
-    },
-    { updatedAt: freshAt }
-  )
-  queryClient.setQueryData(
-    ['token-auto-groups'],
-    {
-      success: true,
-      data: { groups: ['vip', 'default'], max_count: 3 },
-    },
-    { updatedAt: freshAt }
-  )
-  renderedDrawer = { queryClient }
-
+  vi.spyOn(api, 'post').mockResolvedValue({ data: { success: true } })
+  vi.spyOn(api, 'put').mockResolvedValue({ data: { success: true } })
+})
+afterEach(() => {
+  client.clear()
+  localStorage.clear()
+})
+function renderEditor(currentRow?: ApiKey) {
+  const onOpenChange = vi.fn()
   render(
-    <QueryClientProvider client={queryClient}>
-      <I18nextProvider i18n={i18n}>
-        <ApiKeysProvider>
-          <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
-        </ApiKeysProvider>
-      </I18nextProvider>
+    <QueryClientProvider client={client}>
+      <ApiKeysProvider>
+        <ApiKeysMutateDrawer
+          open
+          currentRow={currentRow}
+          onOpenChange={onOpenChange}
+        />
+      </ApiKeysProvider>
     </QueryClientProvider>
   )
-  await waitFor(
-    () => {
-      const saveButton = findButton('Save changes', false)
-      expect(saveButton).toBeEnabled()
-    },
-    { timeout: 1500 }
+  return onOpenChange
+}
+function KeyHeaders() {
+  const table = useReactTable({
+    data: [],
+    columns: useApiKeysColumns(0),
+    getCoreRowModel: getCoreRowModel(),
+  })
+  return (
+    <table>
+      <thead>
+        {table.getHeaderGroups().map((group) => (
+          <tr key={group.id}>
+            {group.headers.map((header) => (
+              <th key={header.id}>
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext()
+                )}
+              </th>
+            ))}
+          </tr>
+        ))}
+      </thead>
+    </table>
   )
 }
-
-function findButton(text: string, required: true): HTMLButtonElement
-function findButton(text: string, required: false): HTMLButtonElement | null
-function findButton(text: string, required = true): HTMLButtonElement | null {
-  const button = screen
-    .queryAllByRole<HTMLButtonElement>('button')
-    .find((candidate) => candidate.textContent?.includes(text))
-  if (required && !button) {
-    throw new Error(`Expected button containing "${text}"`)
-  }
-  return button ?? null
-}
-
-function getControlByLabel(labelText: 'Name' | 'Quantity'): HTMLInputElement
-function getControlByLabel(labelText: 'Group'): HTMLButtonElement
-function getControlByLabel(labelText: 'Auto group order'): HTMLElement
-function getControlByLabel(labelText: string): HTMLElement {
-  const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
-    (candidate) => candidate.textContent?.trim() === labelText
-  )
-  if (!label) {
-    throw new Error(`Expected label "${labelText}"`)
-  }
-
-  const control =
-    label.control ??
-    label
-      .closest('[data-slot="form-item"]')
-      ?.querySelector<HTMLElement>(
-        '[data-slot="form-control"], input, textarea, button[role="combobox"], [role="group"]'
-      )
-  if (!control) {
-    throw new Error(`Expected control for label "${labelText}"`)
-  }
-  return control
-}
-
-function changeInput(input: HTMLInputElement, value: string): void {
-  fireEvent.input(input, { target: { value } })
-}
-
-function selectComboboxOption(
-  trigger: HTMLButtonElement,
-  optionDescription: string
-): void {
-  fireEvent.click(trigger)
-  const option = [
-    ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
-  ].find((candidate) => candidate.textContent?.includes(optionDescription))
-  if (!option) {
-    throw new Error(`Expected option containing "${optionDescription}"`)
-  }
-  fireEvent.click(option)
-}
-
-afterEach(() => {
-  apiClient.get = originalGet
-  apiClient.post = originalPost
-  localStorage.clear()
-  if (renderedDrawer) {
-    renderedDrawer.queryClient.clear()
-    renderedDrawer = null
-  }
-})
-
-describe('API keys mutate drawer Auto group integration', () => {
-  test('inherits the root Auto order and sends an empty override for every batch-created key', async () => {
-    const createdPayloads: Array<Record<string, unknown>> = []
-    installApiFixtures(createdPayloads)
-    await renderCreateDrawer()
-
-    const groupTrigger = getControlByLabel('Group')
-    expect(groupTrigger.textContent?.includes('auto')).toBe(true)
-    expect(
-      document.body.textContent?.includes(
-        'Using the complete global Auto order (2 groups)'
-      )
-    ).toBe(true)
-    expect(
-      [
-        ...document.querySelectorAll('[data-slot="global-auto-order-name"]'),
-      ].map((item) => item.textContent)
-    ).toEqual(['vip', 'default'])
-    expect(findButton('Restore global Auto', true).disabled).toBe(true)
-
-    changeInput(getControlByLabel('Name'), 'batch')
-    changeInput(getControlByLabel('Quantity'), '2')
-    fireEvent.click(findButton('Save changes', true))
-    await waitFor(() => expect(createdPayloads).toHaveLength(2))
-
-    expect(createdPayloads.length).toBe(2)
-    expect(createdPayloads[0]?.name).toBe('batch')
-    for (const payload of createdPayloads) {
-      expect(payload.group).toBe('auto')
-      expect(payload.auto_groups).toEqual([])
-      expect(payload.cross_group_retry).toBe(true)
+describe('simplified API key editor', () => {
+  it('removes group and access restriction columns from the key list', () => {
+    render(<KeyHeaders />)
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeVisible()
+    for (const name of ['Group', 'Models', 'IP Restriction', 'Expires']) {
+      expect(
+        screen.queryByRole('columnheader', { name })
+      ).not.toBeInTheDocument()
     }
   })
-
-  test('preserves an unsaved custom order and mode after Auto to ordinary to Auto changes', async () => {
-    const createdPayloads: Array<Record<string, unknown>> = []
-    installApiFixtures(createdPayloads)
-    await renderCreateDrawer()
-
-    const autoOrderControl = getControlByLabel('Auto group order')
-    const addGroupTrigger = autoOrderControl.querySelector<HTMLButtonElement>(
-      'button[role="combobox"]'
+  it('hides restrictions and creates each key with the default configuration', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
     )
-    if (!addGroupTrigger) {
-      throw new Error('Expected Auto group order combobox')
+    for (const label of [
+      'Group',
+      'Expiration Time',
+      'Model Limits',
+      'IP Whitelist (supports CIDR)',
+    ]) {
+      expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
     }
-    selectComboboxOption(addGroupTrigger, 'Priority access')
-
-    expect(
-      document.querySelector('button[aria-label="Remove vip"]')
-    ).toBeTruthy()
-    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
-      true
+    await user.type(screen.getByLabelText('Name'), 'batch')
+    fireEvent.change(screen.getByLabelText('Quantity'), {
+      target: { value: '2' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+    for (const [, payload] of vi.mocked(api.post).mock.calls) {
+      expect(payload).toMatchObject({
+        group: 'default',
+        auto_groups: [],
+        cross_group_retry: false,
+        expired_time: -1,
+        model_limits_enabled: false,
+        model_limits: '',
+        allow_ips: '',
+      })
+    }
+    expect(api.get).not.toHaveBeenCalled()
+  })
+  it('saves old restricted keys with defaults only after Save changes', async () => {
+    const user = userEvent.setup()
+    const close = renderEditor(key)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Name')).toHaveValue('restricted')
     )
-    expect(findButton('Restore global Auto', true).disabled).toBe(false)
-
-    const groupTrigger = getControlByLabel('Group')
-    selectComboboxOption(groupTrigger, 'Standard access')
-    expect(document.querySelector('button[aria-label="Remove vip"]')).toBe(null)
-    selectComboboxOption(groupTrigger, 'Automatic routing')
-
-    expect(
-      document.querySelector('button[aria-label="Remove vip"]')
-    ).toBeTruthy()
-    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
-      true
+    expect(api.put).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(close).toHaveBeenCalledWith(false))
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/token/',
+      expect.objectContaining({
+        id: 7,
+        group: 'default',
+        expired_time: -1,
+        model_limits_enabled: false,
+        allow_ips: '',
+        remain_quota: 500000,
+      })
     )
-    expect(findButton('Restore global Auto', true).disabled).toBe(false)
-
-    changeInput(getControlByLabel('Name'), 'custom')
-    fireEvent.click(findButton('Save changes', true))
-    await waitFor(() => expect(createdPayloads).toHaveLength(1))
-    expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
+  })
+  it('prevents saving when the existing key cannot be loaded', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('offline'))
+    renderEditor(key)
+    await waitFor(() => expect(api.get).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    expect(api.put).not.toHaveBeenCalled()
   })
 })

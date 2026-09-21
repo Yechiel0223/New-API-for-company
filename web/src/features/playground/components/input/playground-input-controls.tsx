@@ -21,7 +21,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PromptInputButton } from '@/components/ai-elements/prompt-input'
-import { ModelGroupSelector } from '@/components/model-group-selector'
+import { ModelSelector } from '@/components/model-group-selector'
 
 import { getInputControlState } from '../../lib'
 import type { GroupOption, ModelOption } from '../../types'
@@ -44,12 +44,10 @@ type PlaygroundInputControlsProps = {
 export function PlaygroundInputControls({
   disabled,
   groups,
-  groupValue,
   isGenerating,
   isModelLoading = false,
   models,
   modelValue,
-  onGroupChange,
   onModelChange,
   onStop,
   text,
@@ -68,13 +66,10 @@ export function PlaygroundInputControls({
     })
 
   const renderSelector = () => (
-    <ModelGroupSelector
+    <ModelSelector
       selectedModel={modelValue}
       models={models}
       onModelChange={onModelChange}
-      selectedGroup={groupValue}
-      groups={groups}
-      onGroupChange={onGroupChange}
       disabled={isSelectorDisabled}
     />
   )

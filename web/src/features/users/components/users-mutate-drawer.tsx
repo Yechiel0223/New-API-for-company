@@ -75,7 +75,6 @@ import {
   createUser,
   updateUser,
   getUser,
-  getGroups,
   getPermissionCatalog,
   adjustUserQuota,
 } from '../api'
@@ -107,15 +106,6 @@ export function UsersMutateDrawer({
   const currentUser = useAuthStore((s) => s.auth.user)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loadedUser, setLoadedUser] = useState<User | null>(null)
-
-  // Fetch groups
-  const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const groups = groupsData?.data || []
 
   // Permission catalog is owned by the backend; fetched once and reused.
   const { data: permissionCatalog = EMPTY_PERMISSION_CATALOG } = useQuery({
@@ -186,7 +176,9 @@ export function UsersMutateDrawer({
 
     const quotaChanged = isUpdate && Boolean(dirtyFields.quota_dollars)
     const detailsChanged = Boolean(
-      dirtyFields.password || dirtyFields.group || dirtyFields.admin_permissions
+      dirtyFields.password ||
+      dirtyFields.admin_permissions ||
+      (isUpdate && loadedUser?.group !== 'default')
     )
     let savingQuota = false
     let detailsSaved = false
@@ -214,6 +206,7 @@ export function UsersMutateDrawer({
         }
         if (isUpdate) {
           detailsSaved = true
+          setLoadedUser((user) => (user ? { ...user, group: 'default' } : user))
           form.resetField('password', { defaultValue: '' })
           form.resetField('group', { defaultValue: data.group })
           form.resetField('admin_permissions', {
@@ -379,41 +372,7 @@ export function UsersMutateDrawer({
             {/* Group & Quota Settings (Update only) */}
             {isUpdate && (
               <SideDrawerSection>
-                <h3 className='text-sm font-medium'>{t('Group & Quota')}</h3>
-
-                <FormField
-                  control={form.control}
-                  name='group'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Group')}</FormLabel>
-                      <Select
-                        items={groups.map((group) => ({
-                          value: group,
-                          label: group,
-                        }))}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('Select a group')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {groups.map((group) => (
-                              <SelectItem key={group} value={group}>
-                                {group}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <h3 className='text-sm font-medium'>{t('Quota Settings')}</h3>
 
                 <FormField
                   control={form.control}

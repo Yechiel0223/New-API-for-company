@@ -39,9 +39,8 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { getUserGroups, getUserModels } from '../api'
+import { getUserModels } from '../api'
 import {
-  getGroupFallback,
   getModelFallback,
   getOptionLoadErrorMessage,
   shouldClearModelForGroup,
@@ -74,18 +73,8 @@ export function usePlaygroundOptions({
     isError: isModelsError,
     isLoading: isLoadingModels,
   } = useQuery({
-    queryKey: ['playground-models', currentGroup],
-    queryFn: () => getUserModels(currentGroup),
-    enabled: currentGroup !== '',
-  })
-
-  const {
-    data: groupsData,
-    error: groupsError,
-    isError: isGroupsError,
-  } = useQuery({
-    queryKey: ['playground-groups'],
-    queryFn: getUserGroups,
+    queryKey: ['playground-models', 'default'],
+    queryFn: () => getUserModels('default'),
   })
 
   useEffect(() => {
@@ -98,17 +87,6 @@ export function usePlaygroundOptions({
       )
     )
   }, [isModelsError, modelsError, t])
-
-  useEffect(() => {
-    if (!isGroupsError) return
-
-    toast.error(
-      getOptionLoadErrorMessage(
-        groupsError,
-        t('Failed to load playground groups')
-      )
-    )
-  }, [isGroupsError, groupsError, t])
 
   useEffect(() => {
     if (!modelsData) return
@@ -127,15 +105,9 @@ export function usePlaygroundOptions({
   }, [modelsData, currentModel, setModels, updateConfig])
 
   useEffect(() => {
-    if (!groupsData) return
-
-    setGroups(groupsData)
-    const fallback = getGroupFallback(groupsData, currentGroup)
-
-    if (fallback) {
-      updateConfig('group', fallback)
-    }
-  }, [groupsData, currentGroup, setGroups, updateConfig])
+    setGroups([{ value: 'default', label: 'default', ratio: 1 }])
+    if (currentGroup !== 'default') updateConfig('group', 'default')
+  }, [currentGroup, setGroups, updateConfig])
 
   return {
     isLoadingModels,

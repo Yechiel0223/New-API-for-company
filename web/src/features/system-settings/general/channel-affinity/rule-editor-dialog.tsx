@@ -467,12 +467,6 @@ export function RuleEditorDialog(props: Props) {
 
             <div className='grid gap-3 sm:grid-cols-3'>
               <SettingsSwitchField
-                checked={form.watch('include_using_group')}
-                onCheckedChange={(v) => form.setValue('include_using_group', v)}
-                label={t('Include Group')}
-                className='py-0'
-              />
-              <SettingsSwitchField
                 checked={form.watch('include_model_name')}
                 onCheckedChange={(v) => form.setValue('include_model_name', v)}
                 label={t('Include Model')}
