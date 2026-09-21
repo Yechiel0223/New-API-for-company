@@ -26,8 +26,6 @@ import type { StatusBadgeProps } from '@/components/status-badge'
 export const API_KEY_STATUS = {
   ENABLED: 1,
   DISABLED: 2,
-  EXPIRED: 3,
-  EXHAUSTED: 4,
 } as const
 
 export const API_KEY_STATUSES: Record<
@@ -46,16 +44,6 @@ export const API_KEY_STATUSES: Record<
     label: 'Disabled',
     variant: 'neutral',
     value: API_KEY_STATUS.DISABLED,
-  },
-  [API_KEY_STATUS.EXPIRED]: {
-    label: 'Expired',
-    variant: 'warning',
-    value: API_KEY_STATUS.EXPIRED,
-  },
-  [API_KEY_STATUS.EXHAUSTED]: {
-    label: 'Exhausted',
-    variant: 'danger',
-    value: API_KEY_STATUS.EXHAUSTED,
   },
 } as const
 
