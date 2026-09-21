@@ -197,11 +197,7 @@ export function UsersTable() {
     sorting,
     globalFilterFn: (row, _columnId, filterValue) => {
       const searchValue = String(filterValue).toLowerCase()
-      const fields = [
-        row.getValue('username'),
-        row.original.display_name,
-        row.original.email,
-      ]
+      const fields = [row.getValue('username'), row.original.email]
       return fields.some((field) =>
         String(field || '')
           .toLowerCase()
@@ -232,7 +228,7 @@ export function UsersTable() {
       skeletonKeyPrefix='users-skeleton'
       applyHeaderSize
       toolbarProps={{
-        searchPlaceholder: t('Filter by username, name or email...'),
+        searchPlaceholder: t('Filter by username'),
         searchDebounceMs: 500,
         filters: [
           {
@@ -256,11 +252,8 @@ export function UsersTable() {
       getRowClassName={(row, { isMobile }) =>
         cn(
           taskLogRowClickEnabled && 'cursor-pointer',
-          isDisabledUserRow(row.original)
-            ? isMobile
-              ? DISABLED_ROW_MOBILE
-              : DISABLED_ROW_DESKTOP
-            : undefined
+          isDisabledUserRow(row.original) &&
+            (isMobile ? DISABLED_ROW_MOBILE : DISABLED_ROW_DESKTOP)
         )
       }
       renderRow={

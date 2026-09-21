@@ -93,34 +93,8 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Username'),
       cell: ({ row }) => {
         const username = row.getValue('username') as string
-        const displayName = row.original.display_name
-        const remark = row.original.remark
-
         return (
-          <div className='flex min-w-[160px] flex-col gap-1'>
-            <div className='flex items-center gap-2'>
-              <LongText className='max-w-[140px] font-medium'>
-                {username}
-              </LongText>
-              {remark && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={<StatusBadge variant='success' copyable={false} />}
-                  >
-                    <LongText className='max-w-[80px]'>{remark}</LongText>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className='text-xs'>{remark}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-            {displayName && displayName !== username && (
-              <LongText className='text-muted-foreground max-w-[180px] text-xs'>
-                {displayName}
-              </LongText>
-            )}
-          </div>
+          <LongText className='max-w-[180px] font-medium'>{username}</LongText>
         )
       },
       enableHiding: false,
