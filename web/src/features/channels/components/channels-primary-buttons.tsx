@@ -22,7 +22,6 @@ import {
   MoreHorizontal,
   Settings2,
   Trash2,
-  Tags,
   TestTube,
   DollarSign,
   ListChecks,
@@ -71,8 +70,6 @@ export function ChannelsPrimaryButtons() {
   const {
     setOpen,
     setCurrentRow,
-    enableTagMode,
-    setEnableTagMode,
     idSort,
     setIdSort,
     batchMode,
@@ -89,11 +86,6 @@ export function ChannelsPrimaryButtons() {
     ADMIN_PERMISSION_RESOURCES.CHANNEL,
     ADMIN_PERMISSION_ACTIONS.SENSITIVE_WRITE
   )
-
-  const handleTagModeToggle = (checked: boolean) => {
-    localStorage.setItem('enable-tag-mode', String(checked))
-    setEnableTagMode(checked)
-  }
 
   const handleIdSortToggle = (checked: boolean) => {
     localStorage.setItem('channels-id-sort', String(checked))
@@ -120,18 +112,6 @@ export function ChannelsPrimaryButtons() {
             id='channel-batch-mode'
             checked={batchMode}
             onCheckedChange={handleBatchModeToggle}
-          />
-        </div>
-
-        <div className='hidden items-center gap-2 rounded-md border px-3 py-1.5 sm:flex'>
-          <Tags className='text-muted-foreground h-4 w-4' />
-          <Label htmlFor='tag-mode' className='cursor-pointer text-sm'>
-            {t('Tag Mode')}
-          </Label>
-          <Switch
-            id='tag-mode'
-            checked={enableTagMode}
-            onCheckedChange={handleTagModeToggle}
           />
         </div>
 
@@ -185,15 +165,6 @@ export function ChannelsPrimaryButtons() {
             >
               <ListChecks className='mr-2 h-4 w-4' />
               {t('Batch Operations')}
-            </DropdownMenuCheckboxItem>
-
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
-              checked={enableTagMode}
-              onCheckedChange={handleTagModeToggle}
-            >
-              <Tags className='mr-2 h-4 w-4' />
-              {t('Tag Mode')}
             </DropdownMenuCheckboxItem>
 
             <DropdownMenuCheckboxItem

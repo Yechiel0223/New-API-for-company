@@ -58,6 +58,19 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml start
 
 火山方舟真实 API Key 只能在 New API 的渠道页面手工录入。虚拟 Key 也不得保存到项目文件、PowerShell 配置、截图或验收文档。
 
+## 渠道页面显示
+
+渠道页面已隐藏桌面工具栏和移动端更多菜单中的“标签模式”开关。标签数据、聚合逻辑和已有浏览器模式偏好仍保留；此调整仅隐藏入口。
+
+`http://localhost:3000` 使用 Docker 镜像内嵌的前端资源，修改 `web/src` 后仅刷新页面或重启旧容器不会更新界面。在当前项目根目录执行以下命令，然后刷新浏览器：
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/compose.yaml build new-api
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --no-deps new-api
+```
+
+上述操作更新应用容器，保留数据库容器和数据卷。
+
 ## 虚拟 Key 余额修改 SOP
 
 每次设置某个虚拟 Key 的绝对人民币余额时，严格按以下顺序操作：
