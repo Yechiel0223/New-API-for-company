@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 interface ModelsFilterProps {
+  allowUsername?: boolean
   preferences: DashboardChartPreferences
   // The filters currently applied to the dashboard. The dialog edits a copy of
   // these so reopening it never discards a manually picked range.
@@ -152,8 +153,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
     value: Date | string | string[] | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
-    if (field === 'start_timestamp' || field === 'end_timestamp')
+    if (field === 'start_timestamp' || field === 'end_timestamp') {
       setSelectedRange(null)
+    }
   }
 
   const handleQuickRange = (days: number) => {
@@ -277,12 +279,10 @@ export function ModelsFilter(props: ModelsFilterProps) {
           <div className='grid gap-2'>
             <Label htmlFor='time_granularity'>{t('Time Granularity')}</Label>
             <Select
-              items={[
-                ...TIME_GRANULARITY_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(option.label),
-                })),
-              ]}
+              items={TIME_GRANULARITY_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.label),
+              }))}
               value={filters.time_granularity}
               onValueChange={(value) =>
                 handleChange('time_granularity', value as TimeGranularity)
@@ -304,7 +304,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
           </div>
 
           {/* Admin-only fields */}
-          {isAdmin && (
+          {isAdmin && props.allowUsername !== false && (
             <>
               <SectionDivider label={t('Admin Only')} />
 

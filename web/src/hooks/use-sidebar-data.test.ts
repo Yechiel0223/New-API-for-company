@@ -33,15 +33,12 @@ test('company sidebar only exposes approved root entries', () => {
   )
 
   expect(titles).toEqual([
-    'Dashboard',
+    'Model Call Analytics',
+    'User Analytics',
     'API Keys',
-    'Usage Logs',
     'Task Logs',
-    'Wallet',
-    'Profile',
     'Channels',
     'Users',
-    'System Info',
   ])
 
   expect(titles).not.toContain('Playground')
@@ -62,15 +59,12 @@ test('company sidebar keeps the full root view for super admins', () => {
   ).flatMap((group) => group.items.map((item) => item.title))
 
   expect(titles).toEqual([
-    'Dashboard',
+    'Model Call Analytics',
+    'User Analytics',
     'API Keys',
-    'Usage Logs',
     'Task Logs',
-    'Wallet',
-    'Profile',
     'Channels',
     'Users',
-    'System Info',
   ])
 })
 
@@ -81,5 +75,15 @@ test('company sidebar narrows ordinary admins to dashboard and user management',
     ROLE.ADMIN
   ).flatMap((group) => group.items.map((item) => item.title))
 
-  expect(titles).toEqual(['Dashboard', 'Users'])
+  expect(titles).toEqual(['Model Call Analytics', 'User Analytics', 'Users'])
+})
+
+test('ordinary users cannot see user analytics or administration menus', () => {
+  const titles = filterCompanySidebarDataForRole(
+    buildCompanySidebarData(t as never).navGroups,
+    ROLE.USER
+  ).flatMap((group) => group.items.map((item) => item.title))
+  expect(titles).not.toContain('User Analytics')
+  expect(titles).not.toContain('Users')
+  expect(titles).not.toContain('Channels')
 })

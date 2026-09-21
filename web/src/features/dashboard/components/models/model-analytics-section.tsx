@@ -24,7 +24,7 @@ import {
   buildDefaultDashboardFilters,
   getSavedChartPreferences,
 } from '@/features/dashboard/lib/filters'
-import type { DashboardFilters, ModelHealthRow } from '@/features/dashboard/types'
+import type { DashboardFilters } from '@/features/dashboard/types'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -32,9 +32,8 @@ import { ConsumptionDistributionChart } from './consumption-distribution-chart'
 import { LogStatCards } from './log-stat-cards'
 import { ModelAnalyticsToolbar } from './model-analytics-toolbar'
 import { ModelCharts } from './model-charts'
-import { PerformanceOverview } from './performance-overview'
 
-export function ModelAnalyticsSection() {
+export function ModelAnalyticsSection(props: { username?: string }) {
   const { t } = useTranslation()
   const role = useAuthStore((state) => state.auth.user?.role)
   const isAdmin = Boolean(role && role >= ROLE.ADMIN)
@@ -42,25 +41,16 @@ export function ModelAnalyticsSection() {
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     buildDefaultDashboardFilters(preferences)
   )
-  const analytics = useModelAnalytics(filters, isAdmin)
+  const scopedFilters = useMemo(
+    () => ({ ...filters, username: props.username }),
+    [filters, props.username]
+  )
+  const analytics = useModelAnalytics(scopedFilters, isAdmin)
   const analyticsData = analytics.analyticsQuery.isError
     ? undefined
     : analytics.analyticsQuery.data
-  const healthData = analytics.healthQuery.isError
-    ? undefined
-    : analytics.healthQuery.data
   const refresh = () => {
-    void analytics.refreshAll()
-  }
-  const openLogs = (model: ModelHealthRow) => {
-    const end = Math.floor(Date.now() / 1000)
-    const start = end - analytics.healthHours * 3600
-    const search = new URLSearchParams({
-      model: model.model_name,
-      start_timestamp: String(start),
-      end_timestamp: String(end),
-    })
-    window.location.assign(`/usage-logs/common?${search.toString()}`)
+    void analytics.analyticsQuery.refetch()
   }
 
   if (!isAdmin) {
@@ -74,29 +64,17 @@ export function ModelAnalyticsSection() {
   return (
     <div className='space-y-3 sm:space-y-4'>
       <ModelAnalyticsToolbar
-        filters={filters}
+        filters={scopedFilters}
         availableModels={analyticsData?.available_models ?? []}
         onFiltersChange={setFilters}
         onRefresh={refresh}
-        refreshing={
-          analytics.analyticsQuery.isFetching || analytics.healthQuery.isFetching
-        }
+        refreshing={analytics.analyticsQuery.isFetching}
       />
       <LogStatCards
         analytics={analyticsData}
-        health={healthData}
-        loading={
-          analytics.analyticsQuery.isPending || analytics.healthQuery.isPending
-        }
-        error={analytics.analyticsQuery.isError || analytics.healthQuery.isError}
+        loading={analytics.analyticsQuery.isPending}
+        error={analytics.analyticsQuery.isError}
         onRetry={refresh}
-      />
-      <PerformanceOverview
-        data={healthData}
-        loading={analytics.healthQuery.isPending}
-        error={analytics.healthQuery.isError}
-        onRetry={refresh}
-        onModelClick={openLogs}
       />
       <ConsumptionDistributionChart
         analytics={analyticsData}

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { X, User, Wallet, LogOut } from 'lucide-react'
+import { X, LogOut } from 'lucide-react'
 import { AnimatePresence, motion, type Variants } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 
@@ -77,7 +77,7 @@ interface MobileUserProfileProps {
   onNavigate?: () => void
 }
 
-function MobileUserProfile({ user, onNavigate }: MobileUserProfileProps) {
+function MobileUserProfile({ user }: MobileUserProfileProps) {
   const { t } = useTranslation()
   const [signOutOpen, setSignOutOpen] = useDialogState()
   const { displayName, initials, roleLabel } = useUserDisplay(user)
@@ -111,25 +111,6 @@ function MobileUserProfile({ user, onNavigate }: MobileUserProfileProps) {
             </div>
           </div>
         </div>
-
-        {/* Navigation links - same style as top nav */}
-        <Link
-          to='/profile'
-          onClick={onNavigate}
-          className='text-primary/60 hover:text-primary/80 border-border flex items-center gap-2.5 border-b p-2.5 transition-colors'
-        >
-          <User className='size-4' />
-          {t('Profile')}
-        </Link>
-
-        <Link
-          to='/wallet'
-          onClick={onNavigate}
-          className='text-primary/60 hover:text-primary/80 border-border flex items-center gap-2.5 border-b p-2.5 transition-colors'
-        >
-          <Wallet className='size-4' />
-          {t('Wallet')}
-        </Link>
 
         {/* Sign out - consistent style */}
         <Button
@@ -261,9 +242,9 @@ export function MobileDrawer({
                   </div>
                 ) : (
                   <AnimatePresence>
-                    {mobileLinksList.map((link, index) => (
+                    {mobileLinksList.map((link) => (
                       <motion.div
-                        key={`${link.href}-${index}`}
+                        key={link.href}
                         className='border-border border-b p-2.5 last:border-b-0'
                         variants={MOBILE_DRAWER_ANIMATION.menuItem as Variants}
                       >

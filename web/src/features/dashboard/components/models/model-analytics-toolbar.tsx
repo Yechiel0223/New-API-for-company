@@ -58,6 +58,7 @@ export function ModelAnalyticsToolbar(props: ModelAnalyticsToolbarProps) {
   const [activePreset, setActivePreset] =
     useState<ModelAnalyticsRangePreset | null>('7d')
   const preferences = useMemo(() => getSavedChartPreferences(), [])
+  const granularityLabels = { hour: 'Hour', week: 'Week', day: 'Day' }
   const start = props.filters.start_timestamp
   const end = props.filters.end_timestamp
   const rangeLabel =
@@ -101,6 +102,7 @@ export function ModelAnalyticsToolbar(props: ModelAnalyticsToolbarProps) {
           ))}
         </div>
         <ModelsFilter
+          allowUsername={false}
           preferences={preferences}
           currentFilters={props.filters}
           availableModels={props.availableModels}
@@ -129,13 +131,7 @@ export function ModelAnalyticsToolbar(props: ModelAnalyticsToolbarProps) {
       </div>
       <div className='text-muted-foreground mt-2 text-xs' aria-live='polite'>
         {t('Current range:')} {rangeLabel} ·{' '}
-        {t(
-          props.filters.time_granularity === 'hour'
-            ? 'Hour'
-            : props.filters.time_granularity === 'week'
-              ? 'Week'
-              : 'Day'
-        )}
+        {t(granularityLabels[props.filters.time_granularity ?? 'day'])}
       </div>
     </div>
   )

@@ -16,21 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  FileText,
-  Key,
-  LayoutDashboard,
-  ListTodo,
-  Radio,
-  ServerCog,
-  User,
-  Users,
-  Wallet,
-} from 'lucide-react'
 import type { TFunction } from 'i18next'
+import { Key, LayoutDashboard, ListTodo, Radio, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -47,9 +37,15 @@ export function buildCompanySidebarData(t: TFunction): SidebarData {
         title: t('General'),
         items: [
           {
-            title: t('Dashboard'),
+            title: t('Model Call Analytics'),
             url: '/dashboard/models',
             icon: LayoutDashboard,
+          },
+          {
+            title: t('User Analytics'),
+            url: '/dashboard/users',
+            icon: Users,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('API Keys'),
@@ -57,32 +53,9 @@ export function buildCompanySidebarData(t: TFunction): SidebarData {
             icon: Key,
           },
           {
-            title: t('Usage Logs'),
-            url: '/usage-logs/common',
-            icon: FileText,
-          },
-          {
             title: t('Task Logs'),
             url: '/usage-logs/task',
-            activeUrls: ['/usage-logs/drawing'],
-            configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
-          },
-        ],
-      },
-      {
-        id: 'personal',
-        title: t('Personal'),
-        items: [
-          {
-            title: t('Wallet'),
-            url: '/wallet',
-            icon: Wallet,
-          },
-          {
-            title: t('Profile'),
-            url: '/profile',
-            icon: User,
           },
         ],
       },
@@ -100,12 +73,6 @@ export function buildCompanySidebarData(t: TFunction): SidebarData {
             url: '/users',
             icon: Users,
           },
-          {
-            title: t('System Info'),
-            url: '/system-info',
-            icon: ServerCog,
-            requiredRole: ROLE.SUPER_ADMIN,
-          },
         ],
       },
     ],
@@ -121,7 +88,10 @@ export function filterCompanySidebarDataForRole(
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) => item.url === '/dashboard/models' || item.url === '/users'
+          (item) =>
+            item.url === '/dashboard/models' ||
+            item.url === '/dashboard/users' ||
+            item.url === '/users'
         ),
       }))
       .filter((group) => group.items.length > 0)

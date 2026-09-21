@@ -23,7 +23,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import type { ModelAnalyticsData, ModelHealthData } from '../../../types'
+import type { ModelAnalyticsData } from '../../../types'
 import { LogStatCards } from '../log-stat-cards'
 
 const analytics: ModelAnalyticsData = {
@@ -51,22 +51,6 @@ const analytics: ModelAnalyticsData = {
   updated_at: 1788249600,
 }
 
-const health: ModelHealthData = {
-  window_hours: 24,
-  overall: {
-    status: 'warning',
-    total_calls: 20,
-    success_calls: 19,
-    failure_calls: 1,
-    running_calls: 0,
-    stuck_calls: 0,
-    success_rate: 95,
-  },
-  current_load: { rpm: 1.2, tpm: 12_345, window_minutes: 5 },
-  models: [],
-  updated_at: 1788249600,
-}
-
 describe('LogStatCards', () => {
   beforeEach(() => {
     useSystemConfigStore.getState().setConfig({
@@ -81,11 +65,10 @@ describe('LogStatCards', () => {
     })
   })
 
-  it('renders selected totals and fixed five-minute load separately', () => {
+  it('renders selected totals without RPM or TPM', () => {
     render(
       <LogStatCards
         analytics={analytics}
-        health={health}
         loading={false}
         error={false}
         onRetry={vi.fn()}
@@ -95,9 +78,8 @@ describe('LogStatCards', () => {
     expect(screen.getByText('20')).toBeVisible()
     expect(screen.getByText('¥253.18')).toBeVisible()
     expect(screen.getByText('4,226,311')).toBeVisible()
-    expect(screen.getByText('Current RPM')).toBeVisible()
-    expect(screen.getByText('Current TPM')).toBeVisible()
-    expect(screen.getAllByText('Last 5 minutes')).toHaveLength(2)
+    expect(screen.queryByText('Current RPM')).not.toBeInTheDocument()
+    expect(screen.queryByText('Current TPM')).not.toBeInTheDocument()
   })
 
   it('shows explicit retry state after an API error', async () => {
@@ -106,14 +88,13 @@ describe('LogStatCards', () => {
     render(
       <LogStatCards
         analytics={undefined}
-        health={undefined}
         loading={false}
         error
         onRetry={onRetry}
       />
     )
 
-    expect(screen.getAllByText('--')).toHaveLength(5)
+    expect(screen.getAllByText('--')).toHaveLength(3)
     await user.click(screen.getByRole('button', { name: /Retry/i }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })

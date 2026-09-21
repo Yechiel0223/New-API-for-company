@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ModelHealthData } from '../../../types'
@@ -68,7 +68,9 @@ describe('PerformanceOverview', () => {
     )
 
     expect(screen.getByText('Seedream 5.0 Pro')).toBeVisible()
-    expect(screen.getByText('Success 3/4 · 75%')).toBeVisible()
+    expect(
+      within(screen.getByRole('button')).getByText('Success 3/4 · 75%')
+    ).toBeVisible()
     expect(screen.getByText('P50 50s')).toBeVisible()
     expect(screen.getByText('P95 55s')).toBeVisible()
     expect(screen.queryByText('Throughput')).not.toBeInTheDocument()
@@ -97,7 +99,7 @@ describe('PerformanceOverview', () => {
       />
     )
 
-    expect(screen.getByText('No calls')).toBeVisible()
+    expect(screen.getAllByText('No calls')).toHaveLength(2)
     expect(screen.getByText(/Last updated:/)).toBeVisible()
   })
 })

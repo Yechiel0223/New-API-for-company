@@ -16,22 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, Coins, Gauge, Hash, Layers3 } from 'lucide-react'
+import { Coins, Hash, Layers3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import type {
-  ModelAnalyticsData,
-  ModelHealthData,
-} from '@/features/dashboard/types'
+import type { ModelAnalyticsData } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
 
 interface LogStatCardsProps {
   analytics: ModelAnalyticsData | undefined
-  health: ModelHealthData | undefined
   loading: boolean
   error: boolean
   onRetry: () => void
@@ -41,7 +37,6 @@ export function LogStatCards(props: LogStatCardsProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const summary = props.analytics?.summary
-  const load = props.health?.current_load
   const items = [
     {
       title: t('Total calls'),
@@ -66,25 +61,11 @@ export function LogStatCards(props: LogStatCardsProps) {
       icon: Layers3,
       tone: 'chart-4' as const,
     },
-    {
-      title: t('Current RPM'),
-      value: formatNumber(load?.rpm ?? 0, locale),
-      description: t('Last 5 minutes'),
-      icon: Gauge,
-      tone: 'chart-2' as const,
-    },
-    {
-      title: t('Current TPM'),
-      value: formatNumber(load?.tpm ?? 0, locale),
-      description: t('Last 5 minutes'),
-      icon: Activity,
-      tone: 'warning' as const,
-    },
   ]
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
+      <div className='divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
         {items.map((item) => {
           const Icon = item.icon
           return (
@@ -116,7 +97,12 @@ export function LogStatCards(props: LogStatCardsProps) {
       </div>
       {props.error && (
         <div className='border-t p-2 text-center'>
-          <Button type='button' size='sm' variant='ghost' onClick={props.onRetry}>
+          <Button
+            type='button'
+            size='sm'
+            variant='ghost'
+            onClick={props.onRetry}
+          >
             {t('Retry')}
           </Button>
         </div>

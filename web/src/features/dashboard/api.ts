@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { getUsers } from '@/features/users/api'
 import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
   ModelAnalyticsData,
   ModelAnalyticsQuery,
-  ModelHealthData,
   QuotaDataItem,
   UptimeGroupResult,
 } from './types'
@@ -30,6 +30,32 @@ import type {
 // ============================================================================
 // Dashboard APIs
 // ============================================================================
+
+export async function getAnalyticsUsernames(): Promise<string[]> {
+  const usernames = new Set<string>()
+  let page = 1
+  let received = 0
+  while (true) {
+    const response = await getUsers({
+      p: page,
+      page_size: 100,
+      sort_by: 'id',
+      sort_order: 'asc',
+    })
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to load users')
+    }
+    const { items, total } = response.data
+    for (const user of items) {
+      usernames.add(user.username)
+    }
+    received += items.length
+    if (received >= total || items.length === 0) {
+      return [...usernames]
+    }
+    page += 1
+  }
+}
 
 // ----------------------------------------------------------------------------
 // Quota & Usage Data
@@ -97,18 +123,14 @@ export async function getModelAnalytics(
   }>('/api/data/model-analytics', {
     params: {
       ...params,
-      models: params.models?.length ? [...params.models].sort().join(',') : undefined,
+      models: params.models?.length
+        ? [...params.models].sort().join(',')
+        : undefined,
     },
   })
-  return res.data.data
-}
-
-export async function getModelHealth(hours: number): Promise<ModelHealthData> {
-  const res = await api.get<{
-    success: boolean
-    data: ModelHealthData
-    message?: string
-  }>('/api/data/model-analytics/health', { params: { hours } })
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.message || 'Unable to load analytics')
+  }
   return res.data.data
 }
 

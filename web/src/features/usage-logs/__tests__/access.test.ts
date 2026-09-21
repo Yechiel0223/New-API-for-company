@@ -17,6 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
+
+import { t } from 'i18next'
 import { describe, test } from 'vitest'
 
 import { ROLE } from '@/lib/roles'
@@ -24,6 +26,7 @@ import { ROLE } from '@/lib/roles'
 import { resolveLogsViewAccess } from '../components/usage-logs-provider'
 import {
   getVisibleUsageLogSectionsForRole,
+  getUsageLogsSectionNavItems,
   resolveUsageLogsSectionForRole,
 } from '../section-registry'
 
@@ -39,27 +42,32 @@ describe('usage log access tier', () => {
     assert.equal(resolveLogsViewAccess(ROLE.SUPER_ADMIN, 'all'), 'root')
   })
 
+  test('hides drawing logs for ordinary users', () => {
+    assert.deepEqual(getVisibleUsageLogSectionsForRole(ROLE.USER), ['task'])
+    assert.equal(resolveUsageLogsSectionForRole('drawing', ROLE.USER), 'task')
+    assert.deepEqual(
+      getUsageLogsSectionNavItems(t).map((item) => item.url),
+      ['/usage-logs/task']
+    )
+  })
+
   test('limits ordinary admins to task logs only', () => {
     assert.deepEqual(getVisibleUsageLogSectionsForRole(ROLE.ADMIN), ['task'])
-    assert.equal(
-      resolveUsageLogsSectionForRole('drawing', ROLE.ADMIN),
-      'task'
-    )
+    assert.equal(resolveUsageLogsSectionForRole('drawing', ROLE.ADMIN), 'task')
     assert.equal(resolveUsageLogsSectionForRole('common', ROLE.ADMIN), 'task')
   })
 
-  test('keeps root usage log sections unchanged', () => {
+  test('redirects removed common and drawing logs for root users', () => {
     assert.deepEqual(getVisibleUsageLogSectionsForRole(ROLE.SUPER_ADMIN), [
-      'drawing',
       'task',
     ])
     assert.equal(
       resolveUsageLogsSectionForRole('drawing', ROLE.SUPER_ADMIN),
-      'drawing'
+      'task'
     )
     assert.equal(
       resolveUsageLogsSectionForRole('common', ROLE.SUPER_ADMIN),
-      'common'
+      'task'
     )
   })
 })

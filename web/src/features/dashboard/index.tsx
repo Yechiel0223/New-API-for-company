@@ -16,14 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
+import { getRouteApi } from '@tanstack/react-router'
+import { useState, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { FadeIn } from '@/components/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -31,7 +30,6 @@ import { getDefaultDays, getSavedGranularity } from './lib'
 import {
   type DashboardSectionId,
   DASHBOARD_DEFAULT_SECTION,
-  DASHBOARD_SECTION_IDS,
 } from './section-registry'
 import type { UserChartsFilters } from './types'
 
@@ -40,6 +38,12 @@ const route = getRouteApi('/_authenticated/dashboard/$section')
 const LazyModelAnalyticsSection = lazy(() =>
   import('./components/models/model-analytics-section').then((m) => ({
     default: m.ModelAnalyticsSection,
+  }))
+)
+
+const LazyUserAnalyticsSection = lazy(() =>
+  import('./components/users/user-analytics-section').then((m) => ({
+    default: m.UserAnalyticsSection,
   }))
 )
 
@@ -74,7 +78,6 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
 
 export function Dashboard() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const params = route.useParams()
   const userRole = useAuthStore((state) => state.auth.user?.role)
   const activeSection = (params.section ??
@@ -93,54 +96,29 @@ export function Dashboard() {
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.models
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
-  const visibleSections = useMemo(
-    () =>
-      DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'users' || isAdmin
-      ),
-    [isAdmin]
-  )
-  const handleSectionChange = useCallback(
-    (section: string) => {
-      void navigate({
-        to: '/dashboard/$section',
-        params: { section: section as DashboardSectionId },
-      })
-    },
-    [navigate]
-  )
-  const showSectionTabs = visibleSections.length > 1
 
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='space-y-3 sm:space-y-4'>
-          {showSectionTabs && (
-            <Tabs value={activeSection} onValueChange={handleSectionChange}>
-              <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
-                {visibleSections.map((section) => (
-                  <TabsTrigger key={section} value={section}>
-                    {t(SECTION_META[section].titleKey)}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          )}
           {activeSection === 'models' && (
-            <FadeIn>
+            <FadeIn className='space-y-3 sm:space-y-4'>
               <Suspense fallback={<ModelChartsFallback />}>
-                <LazyModelAnalyticsSection />
+                <LazyModelAnalyticsSection key='models' />
+                {isAdmin && (
+                  <LazyUserCharts
+                    filters={userChartsFilters}
+                    onFiltersChange={setUserChartsFilters}
+                  />
+                )}
               </Suspense>
             </FadeIn>
           )}
           {activeSection === 'users' && (
             <FadeIn>
               <Suspense fallback={<ModelChartsFallback />}>
-                <LazyUserCharts
-                  filters={userChartsFilters}
-                  onFiltersChange={setUserChartsFilters}
-                />
+                <LazyUserAnalyticsSection />
               </Suspense>
             </FadeIn>
           )}
